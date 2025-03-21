@@ -1,0 +1,62 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ *
+ */
+
+ .toolbar .font-size-input {
+  font-weight: bold;
+  font-size: 12pt;
+  color: #777;
+  border-radius: 5px;
+  border-color: grey;
+  margin-top: 5px;
+  padding: 2px;
+  width: 33px;
+  height: 28px;
+  text-align: center;
+}
+
+input[type='number']::-webkit-outer-spin-button,
+input[type='number']::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type='number'] {
+  -moz-appearance: textfield;
+}
+
+.add-icon {
+  background-image: url(icons/add-sign.svg);
+  background-repeat: no-repeat;
+  background-position: center;
+}
+
+.minus-icon {
+  background-image: url(icons/minus-sign.svg);
+  background-repeat: no-repeat;
+  background-position: center;
+}
+
+.toolbar div.flex-container {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  border-radius: 10px;
+  border-color: grey;
+}
+
+.toolbar button.font-decrement {
+  padding-left: 0px;
+  padding-right: 0px;
+  margin-right: 2px;
+}
+
+.toolbar button.font-increment {
+  padding-left: 0px;
+  padding-right: 0px;
+  margin-left: 2px;
+}
