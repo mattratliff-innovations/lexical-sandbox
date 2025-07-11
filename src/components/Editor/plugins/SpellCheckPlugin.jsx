@@ -47,7 +47,19 @@ export class SpellCheckNode extends TextNode {
     element.style.textDecoration = 'underline';
     element.style.textDecorationColor = 'red';
     element.style.textDecorationStyle = 'wavy';
-    element.title = `Spelling error. Suggestions: ${this.__suggestions.join(', ')}`;
+    element.style.cursor = 'pointer';
+    
+    // Store the original text and suggestions on the element
+    element._originalText = this.__text;
+    element._suggestions = this.__suggestions;
+    
+    // Add click handler to show modal
+    element.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this.showSuggestionModal(element, this.__suggestions, this.__text);
+    });
+    
     return element;
   }
 
@@ -55,9 +67,171 @@ export class SpellCheckNode extends TextNode {
     // Fixed: Pass config parameter and handle undefined theme
     const updated = super.updateDOM(prevNode, dom, config);
     if (this.__suggestions !== prevNode.__suggestions) {
-      dom.title = `Spelling error. Suggestions: ${this.__suggestions.join(', ')}`;
+      // Update stored data on the element
+      dom._originalText = this.__text;
+      dom._suggestions = this.__suggestions;
+      
+      // Update click handler with new suggestions
+      const existingHandler = dom._spellCheckHandler;
+      if (existingHandler) {
+        dom.removeEventListener('click', existingHandler);
+      }
+      
+      const newHandler = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this.showSuggestionModal(dom, this.__suggestions, this.__text);
+      };
+      
+      dom.addEventListener('click', newHandler);
+      dom._spellCheckHandler = newHandler;
     }
     return updated;
+  }
+
+  showSuggestionModal(element, suggestions, originalText) {
+    // Remove any existing modal
+    const existingModal = document.querySelector('.spell-check-modal');
+    if (existingModal) {
+      existingModal.remove();
+    }
+
+    // Create modal
+    const modal = document.createElement('div');
+    modal.className = 'spell-check-modal';
+    
+    const modalContent = document.createElement('div');
+    modalContent.className = 'spell-check-modal-content';
+    
+    // Header
+    const header = document.createElement('div');
+    header.className = 'spell-check-modal-header';
+    header.innerHTML = `
+      <h3>Spelling Suggestions for "${originalText}"</h3>
+      <button class="spell-check-modal-close">&times;</button>
+    `;
+    
+    // Suggestions list
+    const suggestionsList = document.createElement('div');
+    suggestionsList.className = 'spell-check-suggestions-list';
+    
+    if (suggestions.length > 0) {
+      suggestions.forEach(suggestion => {
+        const suggestionButton = document.createElement('button');
+        suggestionButton.className = 'spell-check-suggestion-btn';
+        suggestionButton.textContent = suggestion;
+        suggestionButton.onclick = () => {
+          this.applySuggestion(suggestion, originalText);
+          modal.remove();
+        };
+        suggestionsList.appendChild(suggestionButton);
+      });
+    } else {
+      const noSuggestions = document.createElement('div');
+      noSuggestions.className = 'no-suggestions';
+      noSuggestions.textContent = 'No suggestions available';
+      suggestionsList.appendChild(noSuggestions);
+    }
+    
+    // Actions
+    const actions = document.createElement('div');
+    actions.className = 'spell-check-modal-actions';
+    
+    const ignoreButton = document.createElement('button');
+    ignoreButton.className = 'spell-check-ignore-btn';
+    ignoreButton.textContent = 'Ignore';
+    ignoreButton.onclick = () => {
+      this.ignoreError(originalText);
+      modal.remove();
+    };
+    
+    actions.appendChild(ignoreButton);
+    
+    // Assemble modal
+    modalContent.appendChild(header);
+    modalContent.appendChild(suggestionsList);
+    modalContent.appendChild(actions);
+    modal.appendChild(modalContent);
+    
+    // Add to body
+    document.body.appendChild(modal);
+    
+    // Close modal handlers
+    const closeButton = modal.querySelector('.spell-check-modal-close');
+    closeButton.onclick = () => modal.remove();
+    
+    modal.onclick = (e) => {
+      if (e.target === modal) {
+        modal.remove();
+      }
+    };
+    
+    // Close on escape key
+    const escapeHandler = (e) => {
+      if (e.key === 'Escape') {
+        modal.remove();
+        document.removeEventListener('keydown', escapeHandler);
+      }
+    };
+    document.addEventListener('keydown', escapeHandler);
+  }
+  
+  applySuggestion(suggestion, originalText) {
+    // Use the global editor reference and find the node by its text content
+    if (window.lexicalEditor) {
+      window.lexicalEditor.update(() => {
+        // Find all spell check nodes with matching text
+        const root = window.lexicalEditor.getEditorState()._nodeMap.get('root');
+        if (root) {
+          const findAndReplaceNode = (node) => {
+            if ($isSpellCheckNode(node) && node.getTextContent() === originalText) {
+              node.replace($createTextNode(suggestion));
+              return true; // Found and replaced
+            }
+            return false;
+          };
+
+          // Search through all paragraphs and their children
+          let found = false;
+          root.getChildren().forEach(paragraph => {
+            if (found) return;
+            paragraph.getChildren().forEach(node => {
+              if (found) return;
+              found = findAndReplaceNode(node);
+            });
+          });
+        }
+      });
+    }
+  }
+  
+  ignoreError(originalText) {
+    // Use the global editor reference and find the node by its text content
+    if (window.lexicalEditor) {
+      window.lexicalEditor.update(() => {
+        // Find all spell check nodes with matching text
+        const root = window.lexicalEditor.getEditorState()._nodeMap.get('root');
+        if (root) {
+          const findAndReplaceNode = (node) => {
+            if ($isSpellCheckNode(node) && node.getTextContent() === originalText) {
+              node.replace($createTextNode(originalText));
+              return true; // Found and replaced
+            }
+            return false;
+          };
+
+          // Search through all paragraphs and their children
+          let found = false;
+          root.getChildren().forEach(paragraph => {
+            if (found) return;
+            paragraph.getChildren().forEach(node => {
+              if (found) return;
+              found = findAndReplaceNode(node);
+            });
+          });
+        }
+      });
+    }
   }
 
   static importJSON(serializedNode) {
@@ -147,200 +321,15 @@ class LanguageToolService {
   }
 }
 
-// Spell check plugin hook
-// export function useSpellCheckPlugin() {
-//   const [editor] = useLexicalComposerContext();
-//   const languageToolService = new LanguageToolService();
-
-//   useEffect(() => {
-//     if (!editor) return;
-
-//     let timeoutId = null;
-
-//     const performSpellCheck = async () => {
-//       // Don't perform spell check if editor is not ready
-//       if (!editor.isEditable()) return;
-
-//       editor.update(() => {
-//         const selection = $getSelection();
-//         if (!$isRangeSelection(selection)) return;
-
-//         const root = editor.getEditorState()._nodeMap.get('root');
-//         if (!root) return;
-
-//         const textContent = root.getTextContent();
-//         if (!textContent.trim()) return;
-
-//         // Less aggressive approach: Don't spell check if user is actively typing
-//         const anchorNode = selection.anchor.getNode();
-//         if ($isTextNode(anchorNode) && selection.isCollapsed()) {
-//           return;
-//         }
-
-//         // Debounce spell checking
-//         if (timeoutId) {
-//           clearTimeout(timeoutId);
-//         }
-
-//         timeoutId = setTimeout(async () => {
-//           try {
-//             const errors = await languageToolService.checkText(textContent);
-            
-//             editor.update(() => {
-//               // Don't save/restore selection to avoid transform errors
-//               // Just focus on spell checking without cursor manipulation
-              
-//               // First, convert all SpellCheckNodes back to TextNodes
-//               const nodesToReplace = [];
-              
-//               root.getChildren().forEach(paragraph => {
-//                 paragraph.getChildren().forEach(node => {
-//                   if ($isSpellCheckNode(node)) {
-//                     nodesToReplace.push({
-//                       node,
-//                       replacement: $createTextNode(node.getTextContent()),
-//                     });
-//                   }
-//                 });
-//               });
-
-//               // Replace spell check nodes with regular text nodes
-//               nodesToReplace.forEach(({ node, replacement }) => {
-//                 try {
-//                   node.replace(replacement);
-//                 } catch (error) {
-//                   console.warn('Could not replace spell check node:', error);
-//                 }
-//               });
-
-//               // Now apply new spell check highlights
-//               if (errors.length > 0) {
-//                 applySpellCheckHighlights(root, errors);
-//               }
-//             });
-//           } catch (error) {
-//             console.error('Spell check error:', error);
-//           }
-//         }, 500);
-//       });
-//     };
-
-//     const applySpellCheckHighlights = (root, errors) => {
-//       const allTextNodes = [];
-      
-//       // Collect all text nodes with their positions
-//       let currentOffset = 0;
-//       root.getChildren().forEach(paragraph => {
-//         paragraph.getChildren().forEach(node => {
-//           if ($isTextNode(node)) {
-//             const text = node.getTextContent();
-//             allTextNodes.push({
-//               node,
-//               text,
-//               startOffset: currentOffset,
-//               endOffset: currentOffset + text.length,
-//             });
-//             currentOffset += text.length;
-//           }
-//         });
-//       });
-
-//       // Apply highlights for each error
-//       errors.forEach(error => {
-//         const errorStart = error.offset;
-//         const errorEnd = error.offset + error.length;
-
-//         // Find the text node that contains this error
-//         for (const textNodeInfo of allTextNodes) {
-//           if (errorStart >= textNodeInfo.startOffset && errorEnd <= textNodeInfo.endOffset) {
-//             const relativeStart = errorStart - textNodeInfo.startOffset;
-//             const relativeEnd = errorEnd - textNodeInfo.startOffset;
-            
-//             try {
-//               highlightErrorInNode(textNodeInfo.node, relativeStart, relativeEnd, error.suggestions);
-//             } catch (error) {
-//               console.warn('Could not highlight error in node:', error);
-//             }
-//             break;
-//           }
-//         }
-//       });
-//     };
-
-//     const highlightErrorInNode = (node, start, end, suggestions) => {
-//       const text = node.getTextContent();
-//       const beforeText = text.substring(0, start);
-//       const errorText = text.substring(start, end);
-//       const afterText = text.substring(end);
-
-//       const nodes = [];
-      
-//       if (beforeText) {
-//         nodes.push($createTextNode(beforeText));
-//       }
-      
-//       nodes.push($createSpellCheckNode(errorText, suggestions));
-      
-//       if (afterText) {
-//         nodes.push($createTextNode(afterText));
-//       }
-
-//       // Replace the original node with the new nodes
-//       if (nodes.length > 0) {
-//         try {
-//           node.replace(nodes[0]);
-//           for (let i = 1; i < nodes.length; i++) {
-//             nodes[i - 1].insertAfter(nodes[i]);
-//           }
-//         } catch (error) {
-//           console.warn('Could not replace node during highlighting:', error);
-//         }
-//       }
-//     };
-
-//     // Register listeners with error handling
-//     const removeListeners = mergeRegister(
-//       editor.registerUpdateListener(({ editorState }) => {
-//         try {
-//           editorState.read(() => {
-//             performSpellCheck();
-//           });
-//         } catch (error) {
-//           console.warn('Error in spell check update listener:', error);
-//         }
-//       }),
-      
-//       editor.registerCommand(
-//         SELECTION_CHANGE_COMMAND,
-//         () => {
-//           try {
-//             performSpellCheck();
-//           } catch (error) {
-//             console.warn('Error in spell check selection change:', error);
-//           }
-//           return false;
-//         },
-//         COMMAND_PRIORITY_LOW,
-//       ),
-//     );
-
-//     return () => {
-//       if (timeoutId) {
-//         clearTimeout(timeoutId);
-//       }
-//       removeListeners();
-//     };
-//   }, [editor]);
-
-//   return null;
-// }
-
 export function useSpellCheckPlugin() {
   const [editor] = useLexicalComposerContext();
   const languageToolService = new LanguageToolService();
 
   useEffect(() => {
     if (!editor) return;
+
+    // Store editor reference globally for SpellCheckNode access
+    window.lexicalEditor = editor;
 
     let timeoutId = null;
     let isTyping = false;
@@ -405,7 +394,7 @@ export function useSpellCheckPlugin() {
           } catch (error) {
             console.error('Spell check error:', error);
           }
-        }, 1000)
+        }, 1000);
       });
     };
 
@@ -540,7 +529,7 @@ export function useSpellCheckPlugin() {
   return null;
 }
 
-// Context menu component for spell check suggestions
+// Context menu component for spell check suggestions (kept for backward compatibility)
 export function SpellCheckContextMenu({ editor, spellCheckNode, onClose }) {
   const suggestions = spellCheckNode.getSuggestions();
 
@@ -599,6 +588,128 @@ const styles = `
   cursor: pointer;
 }
 
+.spell-check-error:hover {
+  background-color: rgba(255, 0, 0, 0.1);
+}
+
+/* Modal Styles */
+.spell-check-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 10000;
+}
+
+.spell-check-modal-content {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  max-width: 400px;
+  width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.spell-check-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid #eee;
+}
+
+.spell-check-modal-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #333;
+}
+
+.spell-check-modal-close {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: #666;
+  padding: 0;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+}
+
+.spell-check-modal-close:hover {
+  background-color: #f5f5f5;
+}
+
+.spell-check-suggestions-list {
+  padding: 16px 20px;
+}
+
+.spell-check-suggestion-btn {
+  display: block;
+  width: 100%;
+  padding: 12px 16px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background: white;
+  text-align: left;
+  cursor: pointer;
+  font-size: 14px;
+  margin-bottom: 8px;
+  transition: all 0.2s ease;
+}
+
+.spell-check-suggestion-btn:hover {
+  background-color: #f8f9fa;
+  border-color: #007bff;
+  transform: translateY(-1px);
+}
+
+.spell-check-suggestion-btn:active {
+  transform: translateY(0);
+}
+
+.spell-check-modal-actions {
+  padding: 16px 20px;
+  border-top: 1px solid #eee;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.spell-check-ignore-btn {
+  padding: 8px 16px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background: white;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s ease;
+}
+
+.spell-check-ignore-btn:hover {
+  background-color: #f8f9fa;
+  border-color: #dc3545;
+  color: #dc3545;
+}
+
+.no-suggestions {
+  padding: 16px;
+  color: #666;
+  font-size: 14px;
+  text-align: center;
+  font-style: italic;
+}
+
+/* Legacy context menu styles (kept for backward compatibility) */
 .spell-check-context-menu {
   position: absolute;
   background: white;
@@ -646,12 +757,6 @@ const styles = `
 
 .spell-check-actions button:hover {
   background-color: #f5f5f5;
-}
-
-.no-suggestions {
-  padding: 8px 12px;
-  color: #666;
-  font-size: 14px;
 }
 `;
 
