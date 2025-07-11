@@ -405,7 +405,7 @@ export function useSpellCheckPlugin() {
           } catch (error) {
             console.error('Spell check error:', error);
           }
-        }, 1000);
+        }, 1000)
       });
     };
 
@@ -421,7 +421,7 @@ export function useSpellCheckPlugin() {
       typingTimeout = setTimeout(() => {
         isTyping = false;
         performSpellCheck(); // Check spelling after user stops typing
-      }, 500);
+      }, 1000);
     };
 
     const applySpellCheckHighlights = (root, errors) => {
