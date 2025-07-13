@@ -5,17 +5,15 @@ import {
   $isRangeSelection,
   $isTextNode,
   $getNodeByKey,
+  $getRoot,
   TextNode,
   COMMAND_PRIORITY_LOW,
-  KEY_ARROW_DOWN_COMMAND,
-  KEY_ARROW_LEFT_COMMAND,
-  KEY_ARROW_RIGHT_COMMAND,
-  KEY_ARROW_UP_COMMAND,
   SELECTION_CHANGE_COMMAND,
 } from 'lexical';
-import { $findMatchingParent, mergeRegister } from '@lexical/utils';
+import { mergeRegister } from '@lexical/utils';
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
-import { useEffect } from 'react';
+import { useEffect, useState, useCallback } from 'react';
+import { SpellCheckPluginModal } from './SpellCheckPluginModal';
 
 // Custom node for spelling errors
 export class SpellCheckNode extends TextNode {
@@ -49,189 +47,19 @@ export class SpellCheckNode extends TextNode {
     element.style.textDecorationStyle = 'wavy';
     element.style.cursor = 'pointer';
     
-    // Store the original text and suggestions on the element
-    element._originalText = this.__text;
-    element._suggestions = this.__suggestions;
-    
-    // Add click handler to show modal
-    element.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      this.showSuggestionModal(element, this.__suggestions, this.__text);
-    });
+    // Store the node key on the element for modal access
+    element.setAttribute('data-lexical-spell-check', this.getKey());
     
     return element;
   }
 
   updateDOM(prevNode, dom, config) {
-    // Fixed: Pass config parameter and handle undefined theme
     const updated = super.updateDOM(prevNode, dom, config);
     if (this.__suggestions !== prevNode.__suggestions) {
-      // Update stored data on the element
-      dom._originalText = this.__text;
-      dom._suggestions = this.__suggestions;
-      
-      // Update click handler with new suggestions
-      const existingHandler = dom._spellCheckHandler;
-      if (existingHandler) {
-        dom.removeEventListener('click', existingHandler);
-      }
-      
-      const newHandler = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        this.showSuggestionModal(dom, this.__suggestions, this.__text);
-      };
-      
-      dom.addEventListener('click', newHandler);
-      dom._spellCheckHandler = newHandler;
+      // Update stored node key
+      dom.setAttribute('data-lexical-spell-check', this.getKey());
     }
     return updated;
-  }
-
-  showSuggestionModal(element, suggestions, originalText) {
-    // Remove any existing modal
-    const existingModal = document.querySelector('.spell-check-modal');
-    if (existingModal) {
-      existingModal.remove();
-    }
-
-    // Create modal
-    const modal = document.createElement('div');
-    modal.className = 'spell-check-modal';
-    
-    const modalContent = document.createElement('div');
-    modalContent.className = 'spell-check-modal-content';
-    
-    // Header
-    const header = document.createElement('div');
-    header.className = 'spell-check-modal-header';
-    header.innerHTML = `
-      <h3>Spelling Suggestions for "${originalText}"</h3>
-      <button class="spell-check-modal-close">&times;</button>
-    `;
-    
-    // Suggestions list
-    const suggestionsList = document.createElement('div');
-    suggestionsList.className = 'spell-check-suggestions-list';
-    
-    if (suggestions.length > 0) {
-      suggestions.forEach(suggestion => {
-        const suggestionButton = document.createElement('button');
-        suggestionButton.className = 'spell-check-suggestion-btn';
-        suggestionButton.textContent = suggestion;
-        suggestionButton.onclick = () => {
-          this.applySuggestion(suggestion, originalText);
-          modal.remove();
-        };
-        suggestionsList.appendChild(suggestionButton);
-      });
-    } else {
-      const noSuggestions = document.createElement('div');
-      noSuggestions.className = 'no-suggestions';
-      noSuggestions.textContent = 'No suggestions available';
-      suggestionsList.appendChild(noSuggestions);
-    }
-    
-    // Actions
-    const actions = document.createElement('div');
-    actions.className = 'spell-check-modal-actions';
-    
-    const ignoreButton = document.createElement('button');
-    ignoreButton.className = 'spell-check-ignore-btn';
-    ignoreButton.textContent = 'Ignore';
-    ignoreButton.onclick = () => {
-      this.ignoreError(originalText);
-      modal.remove();
-    };
-    
-    actions.appendChild(ignoreButton);
-    
-    // Assemble modal
-    modalContent.appendChild(header);
-    modalContent.appendChild(suggestionsList);
-    modalContent.appendChild(actions);
-    modal.appendChild(modalContent);
-    
-    // Add to body
-    document.body.appendChild(modal);
-    
-    // Close modal handlers
-    const closeButton = modal.querySelector('.spell-check-modal-close');
-    closeButton.onclick = () => modal.remove();
-    
-    modal.onclick = (e) => {
-      if (e.target === modal) {
-        modal.remove();
-      }
-    };
-    
-    // Close on escape key
-    const escapeHandler = (e) => {
-      if (e.key === 'Escape') {
-        modal.remove();
-        document.removeEventListener('keydown', escapeHandler);
-      }
-    };
-    document.addEventListener('keydown', escapeHandler);
-  }
-  
-  applySuggestion(suggestion, originalText) {
-    // Use the global editor reference and find the node by its text content
-    if (window.lexicalEditor) {
-      window.lexicalEditor.update(() => {
-        // Find all spell check nodes with matching text
-        const root = window.lexicalEditor.getEditorState()._nodeMap.get('root');
-        if (root) {
-          const findAndReplaceNode = (node) => {
-            if ($isSpellCheckNode(node) && node.getTextContent() === originalText) {
-              node.replace($createTextNode(suggestion));
-              return true; // Found and replaced
-            }
-            return false;
-          };
-
-          // Search through all paragraphs and their children
-          let found = false;
-          root.getChildren().forEach(paragraph => {
-            if (found) return;
-            paragraph.getChildren().forEach(node => {
-              if (found) return;
-              found = findAndReplaceNode(node);
-            });
-          });
-        }
-      });
-    }
-  }
-  
-  ignoreError(originalText) {
-    // Use the global editor reference and find the node by its text content
-    if (window.lexicalEditor) {
-      window.lexicalEditor.update(() => {
-        // Find all spell check nodes with matching text
-        const root = window.lexicalEditor.getEditorState()._nodeMap.get('root');
-        if (root) {
-          const findAndReplaceNode = (node) => {
-            if ($isSpellCheckNode(node) && node.getTextContent() === originalText) {
-              node.replace($createTextNode(originalText));
-              return true; // Found and replaced
-            }
-            return false;
-          };
-
-          // Search through all paragraphs and their children
-          let found = false;
-          root.getChildren().forEach(paragraph => {
-            if (found) return;
-            paragraph.getChildren().forEach(node => {
-              if (found) return;
-              found = findAndReplaceNode(node);
-            });
-          });
-        }
-      });
-    }
   }
 
   static importJSON(serializedNode) {
@@ -260,6 +88,11 @@ export function $createSpellCheckNode(text, suggestions = []) {
 
 export function $isSpellCheckNode(node) {
   return node instanceof SpellCheckNode;
+}
+
+// Helper to check if node is an ElementNode
+export function $isElementNode(node) {
+  return node && typeof node.getChildren === 'function';
 }
 
 // LanguageTool API service
@@ -306,7 +139,6 @@ class LanguageToolService {
 
   processLanguageToolResponse(data) {
     return data.matches
-      // .filter(match => match.rule.category.id === 'TYPOS')
       .map(match => ({
         offset: match.offset,
         length: match.length,
@@ -321,28 +153,119 @@ class LanguageToolService {
   }
 }
 
-export function useSpellCheckPlugin() {
+export function SpellCheckPlugin() {
   const [editor] = useLexicalComposerContext();
+  const [modalState, setModalState] = useState({
+    isVisible: false,
+    nodeKey: null,
+    originalText: '',
+    suggestions: [],
+    position: { x: 0, y: 0 }
+  });
+
   const languageToolService = new LanguageToolService();
+
+  // Handle clicks on spell check errors
+  const handleSpellCheckClick = useCallback((event) => {
+    const target = event.target;
+    if (target && target.classList.contains('spell-check-error')) {
+      event.preventDefault();
+      event.stopPropagation();
+      
+      const nodeKey = target.getAttribute('data-lexical-spell-check');
+      if (nodeKey) {
+        // Get node data within editor context
+        editor.read(() => {
+          try {
+            const node = $getNodeByKey(nodeKey);
+            if (node && $isSpellCheckNode(node)) {
+              const rect = target.getBoundingClientRect();
+              const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+              const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
+              
+              setModalState({
+                isVisible: true,
+                nodeKey: nodeKey,
+                originalText: node.getTextContent(),
+                suggestions: node.getSuggestions(),
+                position: {
+                  x: rect.left + scrollLeft + (rect.width / 2),
+                  y: rect.bottom + scrollTop + 5
+                }
+              });
+            }
+          } catch (error) {
+            console.warn('Error reading spell check node:', error);
+          }
+        });
+      }
+    }
+  }, [editor]);
+
+  const closeModal = useCallback(() => {
+    setModalState(prev => ({
+      ...prev,
+      isVisible: false,
+      nodeKey: null,
+      originalText: '',
+      suggestions: []
+    }));
+  }, []);
+
+  // Handle suggestion application
+  const applySuggestion = useCallback((suggestion) => {
+    if (!modalState.nodeKey) return;
+    
+    editor.update(() => {
+      try {
+        const node = $getNodeByKey(modalState.nodeKey);
+        if (node && $isSpellCheckNode(node)) {
+          const textNode = $createTextNode(suggestion);
+          node.replace(textNode);
+        }
+      } catch (error) {
+        console.warn('Could not apply suggestion:', error);
+      }
+    });
+    closeModal();
+  }, [editor, modalState.nodeKey, closeModal]);
+
+  // Handle ignore
+  const ignoreError = useCallback(() => {
+    if (!modalState.nodeKey) return;
+    
+    editor.update(() => {
+      try {
+        const node = $getNodeByKey(modalState.nodeKey);
+        if (node && $isSpellCheckNode(node)) {
+          const textNode = $createTextNode(node.getTextContent());
+          node.replace(textNode);
+        }
+      } catch (error) {
+        console.warn('Could not ignore spelling error:', error);
+      }
+    });
+    closeModal();
+  }, [editor, modalState.nodeKey, closeModal]);
 
   useEffect(() => {
     if (!editor) return;
-
-    // Store editor reference globally for SpellCheckNode access
-    window.lexicalEditor = editor;
 
     let timeoutId = null;
     let isTyping = false;
     let typingTimeout = null;
 
+    // Add global click listener for spell check errors
+    document.addEventListener('click', handleSpellCheckClick);
+
     const performSpellCheck = async () => {
       if (!editor.isEditable()) return;
 
-      editor.update(() => {
+      editor.read(() => {
         const selection = $getSelection();
         if (!$isRangeSelection(selection)) return;
 
-        const root = editor.getEditorState()._nodeMap.get('root');
+        const root = $getRoot();
         if (!root) return;
 
         const textContent = root.getTextContent();
@@ -363,19 +286,31 @@ export function useSpellCheckPlugin() {
             const errors = await languageToolService.checkText(textContent);
             
             editor.update(() => {
+              const root = $getRoot();
+              
               // First, convert all SpellCheckNodes back to TextNodes
               const nodesToReplace = [];
               
-              root.getChildren().forEach(paragraph => {
-                paragraph.getChildren().forEach(node => {
-                  if ($isSpellCheckNode(node)) {
-                    nodesToReplace.push({
-                      node,
-                      replacement: $createTextNode(node.getTextContent()),
-                    });
+              const collectSpellCheckNodes = (node) => {
+                if ($isSpellCheckNode(node)) {
+                  nodesToReplace.push({
+                    node,
+                    replacement: $createTextNode(node.getTextContent()),
+                  });
+                }
+                
+                // Only traverse children if this is an ElementNode
+                if ($isElementNode(node)) {
+                  try {
+                    const children = node.getChildren();
+                    children.forEach(collectSpellCheckNodes);
+                  } catch (error) {
+                    console.warn('Could not get children for node:', error);
                   }
-                });
-              });
+                }
+              };
+
+              collectSpellCheckNodes(root);
 
               // Replace spell check nodes with regular text nodes
               nodesToReplace.forEach(({ node, replacement }) => {
@@ -406,7 +341,7 @@ export function useSpellCheckPlugin() {
         clearTimeout(typingTimeout);
       }
       
-      // Set user as not typing after 500ms of inactivity
+      // Set user as not typing after 1000ms of inactivity
       typingTimeout = setTimeout(() => {
         isTyping = false;
         performSpellCheck(); // Check spelling after user stops typing
@@ -418,20 +353,31 @@ export function useSpellCheckPlugin() {
       
       // Collect all text nodes with their positions
       let currentOffset = 0;
-      root.getChildren().forEach(paragraph => {
-        paragraph.getChildren().forEach(node => {
-          if ($isTextNode(node)) {
-            const text = node.getTextContent();
-            allTextNodes.push({
-              node,
-              text,
-              startOffset: currentOffset,
-              endOffset: currentOffset + text.length,
-            });
-            currentOffset += text.length;
+      
+      const collectTextNodes = (node) => {
+        if ($isTextNode(node) && !$isSpellCheckNode(node)) {
+          const text = node.getTextContent();
+          allTextNodes.push({
+            node,
+            text,
+            startOffset: currentOffset,
+            endOffset: currentOffset + text.length,
+          });
+          currentOffset += text.length;
+        }
+        
+        // Only traverse children if this is an ElementNode
+        if ($isElementNode(node)) {
+          try {
+            const children = node.getChildren();
+            children.forEach(collectTextNodes);
+          } catch (error) {
+            console.warn('Could not get children for node:', error);
           }
-        });
-      });
+        }
+      };
+
+      collectTextNodes(root);
 
       // Apply highlights for each error
       errors.forEach(error => {
@@ -522,64 +468,36 @@ export function useSpellCheckPlugin() {
       if (typingTimeout) {
         clearTimeout(typingTimeout);
       }
+      document.removeEventListener('click', handleSpellCheckClick);
       removeListeners();
     };
-  }, [editor]);
+  }, [editor, handleSpellCheckClick]);
 
-  return null;
-}
-
-// Context menu component for spell check suggestions (kept for backward compatibility)
-export function SpellCheckContextMenu({ editor, spellCheckNode, onClose }) {
-  const suggestions = spellCheckNode.getSuggestions();
-
-  const handleSuggestionClick = (suggestion) => {
-    editor.update(() => {
-      try {
-        spellCheckNode.replace($createTextNode(suggestion));
-      } catch (error) {
-        console.warn('Could not apply suggestion:', error);
-      }
-    });
-    onClose();
-  };
-
-  const handleIgnore = () => {
-    editor.update(() => {
-      try {
-        spellCheckNode.replace($createTextNode(spellCheckNode.getTextContent()));
-      } catch (error) {
-        console.warn('Could not ignore spelling error:', error);
-      }
-    });
-    onClose();
-  };
+  // Create a mock spell check node object for the modal
+  const modalSpellCheckNode = modalState.isVisible ? {
+    getSuggestions: () => modalState.suggestions,
+    getTextContent: () => modalState.originalText
+  } : null;
 
   return (
-    <div className="spell-check-context-menu">
-      <div className="spell-check-suggestions">
-        {suggestions.length > 0 ? (
-          suggestions.map((suggestion, index) => (
-            <button
-              key={index}
-              className="spell-check-suggestion"
-              onClick={() => handleSuggestionClick(suggestion)}
-            >
-              {suggestion}
-            </button>
-          ))
-        ) : (
-          <div className="no-suggestions">No suggestions available</div>
-        )}
-      </div>
-      <div className="spell-check-actions">
-        <button onClick={handleIgnore}>Ignore</button>
-      </div>
-    </div>
+    <SpellCheckPluginModal
+      isVisible={modalState.isVisible}
+      onClose={closeModal}
+      spellCheckNode={modalSpellCheckNode}
+      editor={editor}
+      position={modalState.position}
+      onApplySuggestion={applySuggestion}
+      onIgnore={ignoreError}
+    />
   );
 }
 
-// CSS styles (add to your stylesheet)
+// Hook version for easier integration
+export function useSpellCheckPlugin() {
+  return SpellCheckPlugin;
+}
+
+// CSS styles for spell check errors
 const styles = `
 .spell-check-error {
   text-decoration: underline;
@@ -590,173 +508,6 @@ const styles = `
 
 .spell-check-error:hover {
   background-color: rgba(255, 0, 0, 0.1);
-}
-
-/* Modal Styles */
-.spell-check-modal {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(0, 0, 0, 0.5);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 10000;
-}
-
-.spell-check-modal-content {
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-  max-width: 400px;
-  width: 90%;
-  max-height: 80vh;
-  overflow-y: auto;
-}
-
-.spell-check-modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16px 20px;
-  border-bottom: 1px solid #eee;
-}
-
-.spell-check-modal-header h3 {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 600;
-  color: #333;
-}
-
-.spell-check-modal-close {
-  background: none;
-  border: none;
-  font-size: 24px;
-  cursor: pointer;
-  color: #666;
-  padding: 0;
-  width: 30px;
-  height: 30px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-}
-
-.spell-check-modal-close:hover {
-  background-color: #f5f5f5;
-}
-
-.spell-check-suggestions-list {
-  padding: 16px 20px;
-}
-
-.spell-check-suggestion-btn {
-  display: block;
-  width: 100%;
-  padding: 12px 16px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  background: white;
-  text-align: left;
-  cursor: pointer;
-  font-size: 14px;
-  margin-bottom: 8px;
-  transition: all 0.2s ease;
-}
-
-.spell-check-suggestion-btn:hover {
-  background-color: #f8f9fa;
-  border-color: #007bff;
-  transform: translateY(-1px);
-}
-
-.spell-check-suggestion-btn:active {
-  transform: translateY(0);
-}
-
-.spell-check-modal-actions {
-  padding: 16px 20px;
-  border-top: 1px solid #eee;
-  display: flex;
-  justify-content: flex-end;
-}
-
-.spell-check-ignore-btn {
-  padding: 8px 16px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  background: white;
-  cursor: pointer;
-  font-size: 14px;
-  transition: all 0.2s ease;
-}
-
-.spell-check-ignore-btn:hover {
-  background-color: #f8f9fa;
-  border-color: #dc3545;
-  color: #dc3545;
-}
-
-.no-suggestions {
-  padding: 16px;
-  color: #666;
-  font-size: 14px;
-  text-align: center;
-  font-style: italic;
-}
-
-/* Legacy context menu styles (kept for backward compatibility) */
-.spell-check-context-menu {
-  position: absolute;
-  background: white;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-  z-index: 1000;
-  min-width: 150px;
-}
-
-.spell-check-suggestions {
-  padding: 8px 0;
-  border-bottom: 1px solid #eee;
-}
-
-.spell-check-suggestion {
-  display: block;
-  width: 100%;
-  padding: 8px 12px;
-  border: none;
-  background: none;
-  text-align: left;
-  cursor: pointer;
-  font-size: 14px;
-}
-
-.spell-check-suggestion:hover {
-  background-color: #f5f5f5;
-}
-
-.spell-check-actions {
-  padding: 8px 0;
-}
-
-.spell-check-actions button {
-  display: block;
-  width: 100%;
-  padding: 8px 12px;
-  border: none;
-  background: none;
-  text-align: left;
-  cursor: pointer;
-  font-size: 14px;
-}
-
-.spell-check-actions button:hover {
-  background-color: #f5f5f5;
 }
 `;
 
