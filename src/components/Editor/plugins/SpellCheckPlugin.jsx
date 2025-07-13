@@ -7,6 +7,7 @@ import {
   $getNodeByKey,
   $getRoot,
   TextNode,
+  ElementNode,
   COMMAND_PRIORITY_LOW,
   SELECTION_CHANGE_COMMAND,
 } from 'lexical';
@@ -160,7 +161,8 @@ export function SpellCheckPlugin() {
     nodeKey: null,
     originalText: '',
     suggestions: [],
-    position: { x: 0, y: 0 }
+    position: { x: 0, y: 0 },
+    elementRef: null // Add reference to the DOM element
   });
 
   const languageToolService = new LanguageToolService();
@@ -183,21 +185,28 @@ export function SpellCheckPlugin() {
               const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
               const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
               
+              console.log('SpellCheck: Found node with key:', nodeKey, 'text:', node.getTextContent());
+              
               setModalState({
                 isVisible: true,
                 nodeKey: nodeKey,
                 originalText: node.getTextContent(),
                 suggestions: node.getSuggestions(),
+                elementRef: target, // Store reference to the DOM element
                 position: {
                   x: rect.left + scrollLeft + (rect.width / 2),
                   y: rect.bottom + scrollTop + 5
                 }
               });
+            } else {
+              console.warn('SpellCheck: Node not found or not a spell check node:', nodeKey);
             }
           } catch (error) {
             console.warn('Error reading spell check node:', error);
           }
         });
+      } else {
+        console.warn('SpellCheck: No node key found on clicked element');
       }
     }
   }, [editor]);
@@ -208,7 +217,8 @@ export function SpellCheckPlugin() {
       isVisible: false,
       nodeKey: null,
       originalText: '',
-      suggestions: []
+      suggestions: [],
+      elementRef: null
     }));
   }, []);
 
@@ -216,19 +226,102 @@ export function SpellCheckPlugin() {
   const applySuggestion = useCallback((suggestion) => {
     if (!modalState.nodeKey) return;
     
+    console.log('SpellCheck: Applying suggestion:', suggestion, 'to node:', modalState.nodeKey);
+    
     editor.update(() => {
+      let replaced = false;
+      
+      // Method 1: Try to find by node key
       try {
         const node = $getNodeByKey(modalState.nodeKey);
+        console.log('SpellCheck: Found node for replacement:', node, 'isSpellCheckNode:', $isSpellCheckNode(node));
+        
         if (node && $isSpellCheckNode(node)) {
           const textNode = $createTextNode(suggestion);
           node.replace(textNode);
+          console.log('SpellCheck: Successfully replaced node with suggestion');
+          replaced = true;
+          
+          // Force a re-render by selecting the new node
+          const selection = $getSelection();
+          if ($isRangeSelection(selection)) {
+            textNode.select();
+          }
         }
       } catch (error) {
-        console.warn('Could not apply suggestion:', error);
+        console.warn('Method 1 failed:', error);
+      }
+      
+      // Method 2: Find by traversing the tree if Method 1 failed
+      if (!replaced) {
+        try {
+          const root = $getRoot();
+          let foundNode = null;
+          
+          const findNodeByKey = (node) => {
+            if (node.getKey() === modalState.nodeKey) {
+              foundNode = node;
+              return true;
+            }
+            if ($isElementNode(node)) {
+              const children = node.getChildren();
+              for (const child of children) {
+                if (findNodeByKey(child)) return true;
+              }
+            }
+            return false;
+          };
+          
+          if (findNodeByKey(root) && foundNode && $isSpellCheckNode(foundNode)) {
+            console.log('SpellCheck: Found node via tree traversal');
+            const textNode = $createTextNode(suggestion);
+            foundNode.replace(textNode);
+            replaced = true;
+            
+            const selection = $getSelection();
+            if ($isRangeSelection(selection)) {
+              textNode.select();
+            }
+          }
+        } catch (error) {
+          console.warn('Method 2 failed:', error);
+        }
+      }
+      
+      // Method 3: Find by text content matching if previous methods failed
+      if (!replaced) {
+        try {
+          const root = $getRoot();
+          
+          const findAndReplaceByText = (node) => {
+            if ($isSpellCheckNode(node) && node.getTextContent() === modalState.originalText) {
+              const textNode = $createTextNode(suggestion);
+              node.replace(textNode);
+              console.log('SpellCheck: Successfully replaced via text matching');
+              return true;
+            }
+            
+            if ($isElementNode(node)) {
+              const children = node.getChildren();
+              for (const child of children) {
+                if (findAndReplaceByText(child)) return true;
+              }
+            }
+            return false;
+          };
+          
+          replaced = findAndReplaceByText(root);
+        } catch (error) {
+          console.warn('Method 3 failed:', error);
+        }
+      }
+      
+      if (!replaced) {
+        console.error('SpellCheck: All replacement methods failed');
       }
     });
     closeModal();
-  }, [editor, modalState.nodeKey, closeModal]);
+  }, [editor, modalState.nodeKey, modalState.originalText, closeModal]);
 
   // Handle ignore
   const ignoreError = useCallback(() => {
@@ -240,9 +333,50 @@ export function SpellCheckPlugin() {
         if (node && $isSpellCheckNode(node)) {
           const textNode = $createTextNode(node.getTextContent());
           node.replace(textNode);
+          
+          // Force a re-render by selecting the new node
+          const selection = $getSelection();
+          if ($isRangeSelection(selection)) {
+            textNode.select();
+          }
+        } else {
+          console.warn('Node not found or not a spell check node:', modalState.nodeKey);
         }
       } catch (error) {
         console.warn('Could not ignore spelling error:', error);
+        
+        // Fallback: try to find the node by traversing the tree
+        try {
+          const root = $getRoot();
+          let foundNode = null;
+          
+          const findNodeByKey = (node) => {
+            if (node.getKey() === modalState.nodeKey) {
+              foundNode = node;
+              return true;
+            }
+            if ($isElementNode(node)) {
+              const children = node.getChildren();
+              for (const child of children) {
+                if (findNodeByKey(child)) return true;
+              }
+            }
+            return false;
+          };
+          
+          if (findNodeByKey(root) && foundNode && $isSpellCheckNode(foundNode)) {
+            const textNode = $createTextNode(foundNode.getTextContent());
+            foundNode.replace(textNode);
+            
+            // Force a re-render by selecting the new node
+            const selection = $getSelection();
+            if ($isRangeSelection(selection)) {
+              textNode.select();
+            }
+          }
+        } catch (fallbackError) {
+          console.error('Fallback ignore also failed:', fallbackError);
+        }
       }
     });
     closeModal();
