@@ -1,0 +1,19 @@
+LanguageTool Tasks
+
+- POC to use LanguageTool in Scribe
+   - Setup HTTP server locally and test
+   - Build POC LexicalPlugin for Spell checking using LanguageTool
+- Investigate Dictionaries and how that works
+   - Is is a single dictionary for all users, or multiple?
+   - Would we need to build the backend to support multiple?
+   - What tasks need to be built to support dictionaries?
+- Investigate ehancing the grammar checking
+   - Building custom grammar rules
+   - Using AI Word2Vec
+   - ML grammar supervised learning technique (the user identifies grammatical errors and feeds into the ML)
+   - Download an enhanced grammar model to the HTTP server.
+- 508 compliance for spell checking
+   - aria-labels for misspelled words?
+   - A menu of misspelled words that is tabable?
+- Clicking spell checkinsureg button on toolbar to check spelling and grammar on document
+- Styling of modal and identification of errors
