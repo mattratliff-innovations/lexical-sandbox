@@ -96,31 +96,70 @@ describe('.downloadAllLetters', () => {
   });
 
   it('revokes existing pdfData if provided', async () => {
-    const pdfResponseAll = { data: new Blob() };
-    const htmlFormData = "<html><body><p>lol</p></body></html>";
-    const contacts = [
-      { id: 1, first_name: 'bob',  primaryApplicant: true, letterRecipient: true,  type: CONTACT_TYPE_APPLICANT }, 
-      { id: 2, first_name: 'jane', primaryApplicant: false, letterRecipient: true,  type: CONTACT_TYPE_APPLICANT }, 
-      { id: 3, first_name: 'joe',  primaryApplicant: false, letterRecipient: false, type: CONTACT_TYPE_APPLICANT }]
-    const draft = { id: '42', 
-      registration: { receiptNumber: 'SRC2407050071', }, 
-      letterCategory: { name: 'DDPC' }, 
-      contacts };
-    const supportingDocuments = [];
-    const pdfData = "EXISTING PDF DATA";
+  const pdfResponseAll = { data: new Blob() };
+  const htmlFormData = new FormData(); // Use actual FormData instead of string
+  const contacts = [
+    { id: 1, first_name: 'bob',  primaryApplicant: true, letterRecipient: true,  type: CONTACT_TYPE_APPLICANT }, 
+    { id: 2, first_name: 'jane', primaryApplicant: false, letterRecipient: true,  type: CONTACT_TYPE_APPLICANT }, 
+    { id: 3, first_name: 'joe',  primaryApplicant: false, letterRecipient: false, type: CONTACT_TYPE_APPLICANT }
+  ];
+  const draft = { 
+    id: '42', 
+    registration: { receiptNumber: 'SRC2407050071' }, 
+    letterCategory: { name: 'DDPC' }, 
+    contacts 
+  };
+  const supportingDocuments = [];
+  const pdfData = "EXISTING PDF DATA";
 
-    const setPdfData = jest.fn();
-    jest.spyOn(PreviewUtils, 'buildAllInclusivePdf').mockImplementation(() => ({ pdfResponseAll, htmlFormData }));
-    jest.spyOn(PreviewUtils, 'uploadPdfHtmlToAws').mockImplementation(() => {});
-    URL.createObjectURL = jest.fn().mockReturnValue('newPdfUrl');
-    URL.revokeObjectURL = jest.fn();
-    mockAxios.onPost(`${APP_API_ENDPOINT}/letters/${draft.id}/upload_pdf`).reply(200, {});
-    mockAxios.onPost(`${PDF_ENDPOINT}/from_html`).reply(200, pdfResponseAll);
-    
-    await downloadAllLetters(draft, supportingDocuments, setPdfData, pdfData);
-
-    expect(URL.revokeObjectURL).toHaveBeenCalledWith(pdfData);
-    expect(URL.createObjectURL).toHaveBeenCalled();
-    expect(setPdfData).toHaveBeenCalledWith('newPdfUrl');
+  const setPdfData = jest.fn();
+  
+  // Mock the buildAllInclusivePdf function to return the expected structure
+  jest.spyOn(PreviewUtils, 'buildAllInclusivePdf').mockResolvedValue({ 
+    pdfResponseAll, 
+    htmlFormData 
   });
+  jest.spyOn(PreviewUtils, 'uploadPdfHtmlToAws').mockResolvedValue();
+  
+  URL.createObjectURL = jest.fn().mockReturnValue('newPdfUrl');
+  URL.revokeObjectURL = jest.fn();
+  
+  mockAxios.onPost(`${APP_API_ENDPOINT}/letters/${draft.id}/upload_pdf`).reply(200, {});
+  
+  await downloadAllLetters(draft, supportingDocuments, setPdfData, pdfData);
+
+  expect(URL.revokeObjectURL).toHaveBeenCalledWith(pdfData);
+  expect(URL.createObjectURL).toHaveBeenCalled();
+  expect(setPdfData).toHaveBeenCalledWith('newPdfUrl');
+  expect(fileDownload).toHaveBeenCalledWith(pdfResponseAll.data, 'scribe_SRC2407050071_DDPC.pdf');
+});
+
+  // it('revokes existing pdfData if provided', async () => {
+  //   const pdfResponseAll = { data: new Blob() };
+  //   const htmlFormData = "<html><body><p>lol</p></body></html>";
+  //   const contacts = [
+  //     { id: 1, first_name: 'bob',  primaryApplicant: true, letterRecipient: true,  type: CONTACT_TYPE_APPLICANT }, 
+  //     { id: 2, first_name: 'jane', primaryApplicant: false, letterRecipient: true,  type: CONTACT_TYPE_APPLICANT }, 
+  //     { id: 3, first_name: 'joe',  primaryApplicant: false, letterRecipient: false, type: CONTACT_TYPE_APPLICANT }]
+  //   const draft = { id: '42', 
+  //     registration: { receiptNumber: 'SRC2407050071', }, 
+  //     letterCategory: { name: 'DDPC' }, 
+  //     contacts };
+  //   const supportingDocuments = [];
+  //   const pdfData = "EXISTING PDF DATA";
+
+  //   const setPdfData = jest.fn();
+  //   jest.spyOn(PreviewUtils, 'buildAllInclusivePdf').mockImplementation(() => ({ pdfResponseAll, htmlFormData }));
+  //   jest.spyOn(PreviewUtils, 'uploadPdfHtmlToAws').mockImplementation(() => {});
+  //   URL.createObjectURL = jest.fn().mockReturnValue('newPdfUrl');
+  //   URL.revokeObjectURL = jest.fn();
+  //   mockAxios.onPost(`${APP_API_ENDPOINT}/letters/${draft.id}/upload_pdf`).reply(200, {});
+  //   mockAxios.onPost(`${PDF_ENDPOINT}/from_html`).reply(200, pdfResponseAll);
+    
+  //   await downloadAllLetters(draft, supportingDocuments, setPdfData, pdfData);
+
+  //   expect(URL.revokeObjectURL).toHaveBeenCalledWith(pdfData);
+  //   expect(URL.createObjectURL).toHaveBeenCalled();
+  //   expect(setPdfData).toHaveBeenCalledWith('newPdfUrl');
+  // });
 });
