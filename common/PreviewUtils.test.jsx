@@ -19,6 +19,21 @@ jest.mock('js-file-download', () => ({
 
 jest.mock('js-file-download');
 
+jest.mock('../htmlTo508CompliantPdfHtml', () => jest.fn().mockReturnValue('<div>Mocked HTML</div>'));
+
+jest.mock('../scribeEditor/scribeDocument/ScribeDocumentUtil', () => ({
+  draftToPdfHtml: jest.fn().mockReturnValue('<div>Mocked Draft HTML</div>'),
+  supportingDocumentToPdfHtml: jest.fn().mockReturnValue('<div>Mocked Supporting Doc HTML</div>')
+}));
+
+jest.mock('../PrintedFooter', () => {
+  return () => '<div>Mocked Footer</div>';
+});
+
+jest.mock('react-dom/server', () => ({
+  renderToStaticMarkup: jest.fn().mockReturnValue('<div>Mocked Footer</div>')
+}));
+
 describe('.letterFileName', () => {
   const createDraft = (receiptNumber, name) => ({ registration: { receiptNumber }, letterCategory: { name } });
 
@@ -86,20 +101,7 @@ describe('.capitalizeFirstLetter', () => {
 });
 
 describe('.downloadAllLetters', () => {
-  beforeEach(() => ({
-    // Add these mocks at the top of your test file
-      jest.mock('../htmlTo508CompliantPdfHtml', () => jest.fn().mockReturnValue('<div>Mocked HTML</div>'));
-      jest.mock('../scribeEditor/scribeDocument/ScribeDocumentUtil', () => ({
-        draftToPdfHtml: jest.fn().mockReturnValue('<div>Mocked Draft HTML</div>'),
-        supportingDocumentToPdfHtml: jest.fn().mockReturnValue('<div>Mocked Supporting Doc HTML</div>')
-      }));
-      jest.mock('../PrintedFooter', () => {
-        return function MockedPrintedFooter() {
-          return React.createElement('div', null, 'Mocked Footer');
-        };
-      });
-  }))
-  it('does not proceed if draft is null', async () => {
+  it('does not proceed if draft is null', async () => {git pu
     jest.spyOn(PreviewUtils, 'buildAllInclusivePdf').mockImplementation(() => 'mocked value');
 
     const retval = await downloadAllLetters(null, {}, null, null);
