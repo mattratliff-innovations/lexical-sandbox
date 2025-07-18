@@ -1,3 +1,6 @@
+// 
+
+
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
 import { mergeRegister } from '@lexical/utils';
 import PropTypes from 'prop-types';
@@ -28,6 +31,7 @@ import {
 import * as React from 'react';
 import FontSizeWidget from './FontSizeWidget';
 import TablePlugin from './TablePlugin';
+import { INSERT_FOOTNOTE_COMMAND } from './FootNotePlugin'; // Import the custom footnote command
 
 function ToolbarButton({
   classes = '',
@@ -114,13 +118,14 @@ export default function ToolbarPlugin({
     iconName="maximize"
     onClick={() => editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'maximize')}
   />,
+  // Updated footnote button to use custom command
   footnote: <ToolbarButton
-  id="footnote"
-  ariaLabel="Add Footnote"
-  classes={isBold ? 'active' : ''}
-  iconName="footnote"
-  onClick={() => editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'footnote')}
-/>,
+    id="footnote"
+    ariaLabel="Add Footnote"
+    classes=""
+    iconName="footnote"
+    onClick={() => editor.dispatchCommand(INSERT_FOOTNOTE_COMMAND, undefined)}
+  />,
   source: <ToolbarButton
   id="source"
   ariaLabel="View Source"
