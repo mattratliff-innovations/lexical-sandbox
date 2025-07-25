@@ -86,8 +86,8 @@ TableNode.importJSON = (serializedNode) => {
   return node;
 };
 
-function EndnotePluginWrapper(handleSetSelectedText) {
-  useEndnotePlugin(handleSetSelectedText);
+function EndnotePluginWrapper({ handleSetSelectedText, handleSetCanCreateEndnote }) {
+  useEndnotePlugin(handleSetSelectedText, handleSetCanCreateEndnote);
   return null;
 }
 
@@ -119,7 +119,8 @@ export default function LexicalEditor({
   const [focusSectionMenuIndex, setFocusSectionMenuIndex] = useState(-1);
   const { draftState, setDraftState } = useDataContext();
 
-  const { selectedText, setSelectedText } = useState(null);
+  const [selectedText, setSelectedText] = useState('');
+  const [canCreateEndnote, setCanCreateEndnote] = useState(false);
 
   const [editorReady, setEditorReady] = useState(false);
   const editorRef = useRef(null);
@@ -130,7 +131,11 @@ export default function LexicalEditor({
 
   const handleSetSelectedText = useCallback((activeText) => {
     setSelectedText(activeText);
-  });
+  }, []);
+
+  const handleSetCanCreateEndnote = useCallback((canCreate) => {
+    setCanCreateEndnote(canCreate);
+  }, []);
 
   // Memoized handlers
   const isTargetInsideOfEditor = useCallback(
@@ -286,7 +291,7 @@ export default function LexicalEditor({
               editorId={id}
               alignMenuAnchor={alignMenuAnchor}
               setAlignMenuAnchor={setAlignMenuAnchor}
-              isTextSelected={!!selectedText}
+              canCreateEndnote={canCreateEndnote}
               tableCreatorAnchor={tableCreatorAnchor}
               setTableCreatorAnchor={setTableCreatorAnchor}
               minToolBarDefault={!!type.includes('4admin')}
@@ -322,7 +327,10 @@ export default function LexicalEditor({
             {false && <TreeViewPlugin />}
 
             <ListPlugin />
-            <EndnotePluginWrapper handleSetSelectedText={handleSetSelectedText} />
+            <EndnotePluginWrapper 
+              handleSetSelectedText={handleSetSelectedText} 
+              handleSetCanCreateEndnote={handleSetCanCreateEndnote}
+            />
           </TextEditorArea>
         </EditorContainer>
 

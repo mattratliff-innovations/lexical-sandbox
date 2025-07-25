@@ -1,5 +1,5 @@
 // FootnotePlugin.jsx
-import { $createTextNode, $getSelection, $isRangeSelection, $isTextNode, TextNode, COMMAND_PRIORITY_LOW } from 'lexical';
+import { $createTextNode, $getSelection, $isRangeSelection, $isTextNode, TextNode, COMMAND_PRIORITY_LOW, $getRoot } from 'lexical';
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
 import { useEffect } from 'react';
 import { mergeRegister } from '@lexical/utils';
@@ -90,8 +90,41 @@ export function $isEndnoteNode(node) {
   return node instanceof EndnoteNode;
 }
 
+// Helper function to check if cursor is on a word
+function $isOnWord(selection) {
+  if (!$isRangeSelection(selection)) {
+    return false;
+  }
+
+  const selectedText = selection.getTextContent();
+  
+  // If there's selected text, return true
+  if (selectedText.trim() !== '') {
+    return true;
+  }
+
+  // If no text is selected, check if cursor is on a word
+  const nodes = selection.getNodes();
+  if (nodes.length > 0 && $isTextNode(nodes[0])) {
+    const textNode = nodes[0];
+    const text = textNode.getTextContent();
+    const { offset } = selection.anchor;
+
+    // Check if cursor is within a word
+    if (offset > 0 && offset < text.length) {
+      return /\w/.test(text[offset - 1]) || /\w/.test(text[offset]);
+    } else if (offset === 0) {
+      return /\w/.test(text[offset]);
+    } else if (offset === text.length) {
+      return /\w/.test(text[offset - 1]);
+    }
+  }
+
+  return false;
+}
+
 // Hook to register the footnote plugin
-export function useEndnotePlugin(handleSetSelectedText) {
+export function useEndnotePlugin(handleSetSelectedText, handleSetCanCreateEndnote) {
   const [editor] = useLexicalComposerContext();
 
   useEffect(() => {
@@ -111,9 +144,26 @@ export function useEndnotePlugin(handleSetSelectedText) {
       }, 500);
     };
 
+    const checkSelection = () => {
+      editor.getEditorState().read(() => {
+        const selection = $getSelection();
+        if ($isRangeSelection(selection)) {
+          const selectedText = selection.getTextContent();
+          const canCreateEndnote = $isOnWord(selection);
+          
+          handleSetSelectedText(selectedText);
+          handleSetCanCreateEndnote(canCreateEndnote);
+        } else {
+          handleSetSelectedText('');
+          handleSetCanCreateEndnote(false);
+        }
+      });
+    };
+
     const removeUpdateListener = editor.registerUpdateListener(({ editorState }) => {
       editorState.read(() => {
         checkForSelectedText();
+        checkSelection();
       });
     });
 
@@ -121,7 +171,7 @@ export function useEndnotePlugin(handleSetSelectedText) {
       if (timeoutId) clearTimeout(timeoutId);
       removeUpdateListener();
     };
-  }, [editor]);
+  }, [editor, handleSetSelectedText, handleSetCanCreateEndnote]);
 
   useEffect(() => {
     if (!editor) return;
@@ -146,9 +196,6 @@ export function useEndnotePlugin(handleSetSelectedText) {
           // If no text is selected, try to select the word at cursor
           const nodes = selection.getNodes();
           if (nodes.length > 0 && $isTextNode(nodes[0])) {
-            //enable the endnote toolbar button
-            handleSetSelectedText(selectedText);
-
             const textNode = nodes[0];
             const text = textNode.getTextContent();
             const { offset } = selection.anchor;
@@ -195,8 +242,6 @@ export function useEndnotePlugin(handleSetSelectedText) {
             }
           }
         } else {
-          //trigger to open modal
-
           // Replace selected text with footnote node
           const footnoteNode = $createEndnoteNode(selectedText, footnoteCounter++);
           selection.insertNodes([footnoteNode]);

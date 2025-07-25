@@ -119,7 +119,7 @@ export default function ToolbarPlugin({
   isCanRedo,
   alignMenuAnchor = {},
   setAlignMenuAnchor = () => {},
-  isTextSelected,
+  canCreateEndnote = false,
   tableCreatorAnchor = {},
   setTableCreatorAnchor = () => {},
   editorId,
@@ -339,11 +339,11 @@ export default function ToolbarPlugin({
     },
     endnote: {
       id: 'endnote',
-      title: 'Insert Endnote',
-      ariaLabel: 'Insert Endnote',
-      readonly: isTextSelected,
+      title: 'Add Footnote',
+      ariaLabel: 'Add Footnote',
+      readonly: !canCreateEndnote,
       icon: <ArrowDownRightSquareFill />,
-      action: () => dispatchAction('INSERT_FOOTNOTE_COMMAND', undefined),
+      action: () => setShowAddEndnoteModal(true),
     },
   };
 
@@ -507,5 +507,6 @@ ToolbarPlugin.propTypes = {
   setAlignMenuAnchor: PropTypes.func,
   tableCreatorAnchor: PropTypes.shape({}),
   setTableCreatorAnchor: PropTypes.func,
+  canCreateEndnote: PropTypes.bool,
   minToolBarDefault: PropTypes.bool.isRequired,
 };
