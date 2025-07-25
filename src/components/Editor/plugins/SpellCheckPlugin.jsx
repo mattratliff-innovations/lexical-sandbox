@@ -165,10 +165,13 @@ export function SpellCheckPlugin() {
     elementRef: null // Add reference to the DOM element
   });
 
+  console.log('spell check plugin')
   const languageToolService = new LanguageToolService();
 
   // Handle clicks on spell check errors
   const handleSpellCheckClick = useCallback((event) => {
+
+    console.log('spell checking')
     const target = event.target;
     if (target && target.classList.contains('spell-check-error')) {
       event.preventDefault();
@@ -395,9 +398,12 @@ export function SpellCheckPlugin() {
     const performSpellCheck = async () => {
       if (!editor.isEditable()) return;
 
+      console.log('performing spell checking')
       editor.read(() => {
         const selection = $getSelection();
         if (!$isRangeSelection(selection)) return;
+
+        console.log('has selection')
 
         const root = $getRoot();
         if (!root) return;

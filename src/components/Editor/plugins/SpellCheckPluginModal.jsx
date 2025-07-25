@@ -123,7 +123,7 @@ export function SpellCheckPluginModal({
         <div className="spell-checker-modal-content">
           <div className="section-header">
             <span className="section-title">Spelling</span>
-            <div className="info-icon" title="Spelling suggestions">i</div>
+            <div className="info-icon" title="Add to dictionary">+</div>
           </div>
           
           <div className="message">
