@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Layer_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1080 1080">
+  <defs>
+    <style>
+      .cls-1 {
+        fill: none;
+      }
+
+      .cls-2 {
+        fill: #707070;
+      }
+
+      .cls-3 {
+        clip-path: url(#clippath);
+      }
+    </style>
+    <clipPath id="clippath">
+      <rect class="cls-1" x="165" y="40" width="750" height="1000"/>
+    </clipPath>
+  </defs>
+  <g id="Button_-_Unlocked">
+    <g class="cls-3">
+      <g id="Icon_-_Unlocked">
+        <path id="Path_156" class="cls-2" d="M540,40c-138.04-.03-249.97,111.85-250,249.89,0,.04,0,.08,0,.11v62.51h125v-62.51c-3.55-65.48,46.65-121.45,112.14-125,4.28-.23,8.58-.23,12.86,0,65.48-3.55,121.45,46.65,125,112.14.23,4.28.23,8.58,0,12.86v250H165v500h750v-500h-125v-250c.03-138.04-111.85-249.97-249.89-250-.04,0-.08,0-.11,0"/>
+      </g>
+    </g>
+  </g>
+</svg>

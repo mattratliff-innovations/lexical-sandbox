@@ -1,0 +1,9 @@
+.portraitUsLetterEditor .lexical-editor-input {
+  min-height: 50px;
+}
+
+.add-paragraph-wrapper {
+  width: 205px;
+  text-align: left;
+  margin-inline: auto;
+}

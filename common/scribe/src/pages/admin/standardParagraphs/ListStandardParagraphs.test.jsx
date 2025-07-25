@@ -1,0 +1,184 @@
+import * as React from 'react';
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import MockAdapter from 'axios-mock-adapter';
+import axios from 'axios';
+import { BrowserRouter } from 'react-router-dom';
+import { ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
+import ListStandardParagraphs from './ListStandardParagraphs';
+import { APP_API_ENDPOINT } from '../../../http/authenticatedAxios';
+import { queryDruidAccessibleTableByLabel, getDruidAccessibleTableColumnValues } from '../../../../testSetup/DruidTableHelper';
+import waitForLoadingToFinish from '../../../testUtils/waitForLoadingToFinish';
+
+const mockAxios = new MockAdapter(axios, { onNoMatch: 'throwException' });
+
+// Mock navigate
+const mockedUseNavigate = jest.fn();
+jest.mock('react-router-dom', () => ({
+  ...jest.requireActual('react-router-dom'),
+  useNavigate: () => mockedUseNavigate,
+}));
+
+const renderComponent = async () => {
+  render(
+    <>
+      <ToastContainer />
+      <BrowserRouter>
+        <ListStandardParagraphs />
+      </BrowserRouter>
+    </>
+  );
+};
+
+const mockData = [
+  {
+    id: '1e09ca5e-f10e-489a-9158-082d34004868',
+    name: 'SP Name A1',
+    code: 'STANDARDPARAGRAPH1',
+    createdAt: '2024-12-23T14:16:19.020Z',
+    updatedAt: '2024-12-23T14:16:19.020Z',
+    active: true,
+  },
+  {
+    id: '2e09ca5e-f10e-489a-9158-082d34004868',
+    name: 'SP Name B2',
+    code: 'STANDARDPARAGRAPH2',
+    createdAt: '2024-01-23T14:16:19.020Z',
+    updatedAt: '2024-01-23T14:16:19.020Z',
+    active: true,
+  },
+  {
+    id: '3e09ca5e-f10e-489a-9158-082d34004868',
+    code: 'STANDARDPARAGRAPH3',
+    name: 'SP Name C3',
+    createdAt: '2024-06-23T14:16:19.020Z',
+    updatedAt: '2024-06-23T14:16:19.020Z',
+    active: true,
+  },
+  {
+    id: '4e09ca5e-f10e-489a-9158-082d34004868',
+    name: 'SP Name D4',
+    code: 'STANDARDPARAGRAPH4',
+    createdAt: '2024-06-23T14:16:19.020Z',
+    updatedAt: '2024-11-23T14:16:19.020Z',
+    active: true,
+  },
+  {
+    id: '5e09ca5e-f10e-489a-9158-082d34004868',
+    name: 'SP Name E5',
+    code: 'STANDARDPARAGRAPH5',
+    createdAt: '2024-06-23T14:16:19.020Z',
+    updatedAt: '2024-11-21T14:16:19.020Z',
+    active: true,
+  },
+];
+
+const setMockDataAndRenderComponent = async () => {
+  mockAxios.onGet(`${APP_API_ENDPOINT}/standard_paragraphs`).reply(200, mockData);
+  await renderComponent();
+  await waitForLoadingToFinish();
+};
+
+const setErrorMockAndRenderComponent = async () => {
+  mockAxios.onGet(`${APP_API_ENDPOINT}/standard_paragraphs`).timeout();
+
+  await renderComponent();
+  await waitForLoadingToFinish();
+};
+
+describe('ListStandardParagraphs', () => {
+  beforeEach(() => {
+    mockAxios.reset();
+    jest.clearAllMocks();
+  });
+
+  it('displays last modified date orders correctly', async () => {
+    await setMockDataAndRenderComponent();
+
+    // Sort default data array to start
+    const sortedDatesDefault = mockData.map((item) => new Date(item.updatedAt)).sort((a, b) => b - a);
+
+    const { accessibleTable, sortButton } = queryDruidAccessibleTableByLabel('Last Modified'); // provide the header label
+
+    // Click to sort ascending
+    await userEvent.click(sortButton);
+    let updatedDates = getDruidAccessibleTableColumnValues(accessibleTable, 4).map((dateStr) => new Date(dateStr));
+    expect(updatedDates).toEqual(sortedDatesDefault);
+
+    // Click to sort descending
+    await userEvent.click(sortButton);
+    updatedDates = getDruidAccessibleTableColumnValues(accessibleTable, 4).map((dateStr) => new Date(dateStr));
+    expect(updatedDates).toEqual(sortedDatesDefault.reverse());
+  });
+
+  it('displays an error toast on error', async () => {
+    await setErrorMockAndRenderComponent();
+
+    const expected = 'There was an error retrieving the Standard Paragraphs list';
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(expected);
+  });
+
+  it('shows a message when there are no records', async () => {
+    mockAxios.onGet(`${APP_API_ENDPOINT}/standard_paragraphs`).reply(200, []);
+    await renderComponent();
+    await waitForLoadingToFinish();
+
+    expect(screen.getByTestId('adminListCreateButtonDiv', { code: 'No data found.' })).toBeInTheDocument();
+  });
+});
+
+describe('ListStandardParagraphs Druid Table', () => {
+  beforeEach(() => {
+    mockAxios.reset();
+    jest.clearAllMocks();
+  });
+
+  it('displays code orders correctly', async () => {
+    const userInstance = userEvent.setup();
+    await setMockDataAndRenderComponent();
+
+    // Sort default data array to start
+    const sortedNameDefault = mockData.map((item) => item.name).sort((a, b) => a.localeCompare(b));
+    const { accessibleTable, sortButton } = queryDruidAccessibleTableByLabel('Name'); // provide the header label
+
+    // Default Sort
+    await waitFor(() => {
+      const updatedNameDefaultOrder = getDruidAccessibleTableColumnValues(accessibleTable, 1);
+      expect(updatedNameDefaultOrder).toEqual(sortedNameDefault);
+    });
+
+    // First Click: Reverse the Default
+    await userInstance.click(sortButton);
+    const updatedNameReverseOrder = getDruidAccessibleTableColumnValues(accessibleTable, 1);
+
+    await waitFor(() => {
+      const defaultCopy = [...sortedNameDefault];
+      expect(updatedNameReverseOrder).toEqual(defaultCopy.reverse());
+    });
+
+    // Second Click: Back to Original
+    await userInstance.click(sortButton);
+    const updatedNameOriginalOrder = getDruidAccessibleTableColumnValues(accessibleTable, 1);
+    await waitFor(() => {
+      expect(updatedNameOriginalOrder).toEqual(sortedNameDefault);
+    });
+  });
+});
+
+describe('Edit Standard Paragraph', () => {
+  it('Navigates to the edit page', async () => {
+    await waitFor(() => setMockDataAndRenderComponent(mockData));
+
+    const { shadowRoot } = screen.getByTestId(`edit-${mockData[0].id}`);
+    await userEvent.click(shadowRoot.querySelector('.dr-btn'));
+
+    expect(mockedUseNavigate).toHaveBeenCalledWith(`/admin/standardparagraphs/${mockData[0].id}`);
+  });
+
+  it('Name column links to the edit page', async () => {
+    await waitFor(() => setMockDataAndRenderComponent(mockData));
+    expect(screen.getByTestId('edit-SP Name A1')).toHaveAttribute('href', `/admin/standardparagraphs/${mockData[0].id}`);
+  });
+});

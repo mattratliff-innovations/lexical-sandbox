@@ -1,0 +1,12 @@
+#dropdown-basic .filter-menu-icon {
+  height: 35px;
+  padding: 5px;
+  border: 2px solid black;
+  border-radius: 10px;
+  box-shadow: 1px 1px 3px #747474;
+  background-color: white;
+}
+
+#dropdown-basic:focus {
+  border: 2px solid #015ecc;
+}

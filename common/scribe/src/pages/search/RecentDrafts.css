@@ -1,0 +1,17 @@
+.recent-drafts thead th {
+  background-color: #707070;
+  color: #ffffff;
+  padding: 20px 0px 20px 0px;
+}
+
+table.recent-drafts {
+  caption-side: top;
+}
+
+.recent-drafts-status {
+  text-transform: capitalize;
+}
+
+.table-horizontal-scroll {
+  overflow-x: auto;
+}

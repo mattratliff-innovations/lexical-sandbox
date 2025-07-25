@@ -1,0 +1,54 @@
+.change-header-modal-body {
+  display: flex;
+  flex-direction: row;
+}
+
+.form-fields-group {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  flex-grow: 1;
+}
+
+.address-box {
+  display: flex;
+  flex-direction: column;
+  flex-grow: 3;
+  flex-shrink: 1;
+  flex-basis: auto;
+  margin-inline-start: 1rem;
+  margin-block-start: 0;
+}
+
+.radio-option-container {
+  display: flex;
+  flex-direction: row;
+  padding-top: 6px;
+  justify-content: flex-start;
+  align-items: center;
+  flex-grow: 1;
+  flex-shrink: 1;
+}
+
+.modal-button-container dr-button {
+  flex: 1 1 auto;
+  flex-direction: row;
+  justify-content: flex-start;
+}
+
+.address-box legend {
+  font-size: 1rem;
+}
+
+/* Intelligent Squishyness */
+@media screen and (max-width: 991px) {
+  .change-header-modal-body {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .address-box {
+    margin-inline-start: 0;
+    margin-block-start: 0;
+  }
+}

@@ -1,0 +1,76 @@
+.change-header-modal-body {
+  display: flex;
+  flex-direction: row;
+}
+
+.modal-body {
+  padding-top: 0px;
+}
+
+.mb-3 {
+  margin-top: 0px !important;
+}
+
+.letter-editor-guide-modal {
+  width: 1300px !important;
+  height: 500px !important;
+  max-width: 90vw;
+}
+
+#letter-guide {
+  width: 100%;
+  padding: 5px;
+}
+
+#letter-guide hr {
+  height: 7px;
+  background-color: #223b72;
+  opacity: 1;
+  width: 45%;
+  margin-top: 0px;
+}
+
+#left-panel {
+  width: 45%;
+  float: left;
+}
+
+#right-panel {
+  width: 55%;
+  float: right;
+}
+
+.shortcut {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  min-width: 50%;
+}
+
+.shortcut p {
+  width: 70%;
+}
+
+.buttonList:nth-child(1) {
+  width: 320px;
+}
+
+.buttonList:nth-child(2) {
+  width: 370px;
+}
+
+.buttonList div {
+  padding: 5px;
+}
+
+.buttonList div img {
+  padding-right: 10px;
+}
+
+/* Intelligent Squishyness */
+@media screen and (max-width: 991px) {
+  .change-header-modal-body {
+    display: flex;
+    flex-direction: column;
+  }
+}

@@ -1,0 +1,293 @@
+.editorCharacterCount {
+  position: relative;
+}
+
+.editor-character-count {
+  color: #009d2c;
+}
+
+.editor-character-count-warn {
+  color: #ffb23e;
+}
+
+.editor-character-count-max {
+  color: #c41230;
+}
+
+.visible {
+  visibility: visible;
+}
+
+.hidden {
+  visibility: hidden;
+}
+
+.t-center {
+  text-align: center;
+}
+
+/* Add Paragraph/Section button */
+.editorActions {
+  clear: both;
+}
+
+.editorActions button {
+  margin: 6px;
+  background-color: #707070;
+  border-color: #eeeeee;
+  color: #ffffff;
+}
+
+.editorActions button:hover {
+  background-color: #ffffff;
+  color: #707070;
+  border-color: #707070;
+}
+
+.editorActions #addSectionButtonLabel {
+  color: #707070;
+}
+
+.editorActions #addSectionButtonLabel:hover {
+  font-weight: bold;
+}
+
+/* This allows the bold-on-hover to work without moving the text */
+.editorActions #addSectionButtonLabel::before {
+  display: block;
+  content: attr(title);
+  font-weight: bold;
+  height: 0;
+  overflow: hidden;
+  visibility: hidden;
+}
+
+.portraitUsLetter {
+  font-family: var(--us-letter-font-family);
+  width: var(--us-letter-width);
+  border: 2px solid #707070;
+  position: relative;
+  transform: scale(var(--us-letter-editor-scale));
+  transform-origin: 0% 0% 0px;
+}
+
+.portraitUsLetterObject {
+  width: calc(var(--us-letter-width) * var(--us-letter-editor-scale));
+  border: 2px solid #707070;
+  height: auto;
+}
+
+.letter-editor-header {
+  font-weight: 500;
+  margin: 0;
+}
+
+.portraitUsLetterEditor {
+  opacity: 1;
+  min-height: var(--us-letter-height);
+  background-color: white;
+}
+
+.portraitUsLetterEditor p {
+  line-height: var(--us-letter-line-height);
+}
+
+.topMarginPlaceholder {
+  margin: 0px;
+}
+
+.inlinePdf {
+  width: 100%;
+  min-height: 168vh;
+}
+
+/* This is the left column menu with the contacts */
+.contacts {
+  background-color: #eeeeee;
+}
+
+.contacts div.recipient {
+  margin-bottom: 1rem;
+}
+
+.contacts .recipient p {
+  margin-bottom: 0;
+}
+
+.contacts .recipient.card {
+  margin-right: 1rem;
+}
+
+/* Currently being used in DraftPreview.jsx, but can be remove when converting to latest buttons. */
+.sidebar h3 {
+  font-weight: 500;
+}
+
+.sidebar .btn-custom {
+  background-color: #ffffff;
+  color: #000000;
+  border-color: #000000;
+  margin-bottom: 6px;
+}
+
+.sidebar label:hover {
+  font-weight: bold;
+}
+
+.sidebar .btn-custom:hover {
+  background-color: #707070;
+  color: #ffffff;
+  border-color: #707070;
+}
+
+.sidebar .btn-custom:active {
+  background-color: #0d6efd;
+  color: #ffffff;
+  border-color: #000000;
+}
+
+.sidebar .btn-custom::before {
+  font-weight: bold;
+  height: 0;
+  overflow: hidden;
+  visibility: hidden;
+}
+
+/* Up & Down Buttons */
+.editorContainer .editorMenuRight .btn-custom {
+  background-color: #707070;
+  border-color: #eeeeee;
+  border-radius: 4px;
+  color: #ffffff;
+  height: 19px;
+  width: 19px;
+  margin: auto;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.border-right-yes {
+  border-right: 12px solid #eeeeee;
+}
+
+.border-right-no {
+  border-right: 12px solid #707070;
+}
+
+/* Left Wing Buttons */
+.editorContainer .editorMenuLeft .btn-custom {
+  background-color: #707070;
+  border-color: #eeeeee;
+  border-radius: 4px;
+  color: #ffffff;
+  height: 19px;
+  width: 19px;
+  margin: auto;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.editorContainer .editorMenuLeft .btn-custom .wing-icon {
+  margin: 2px;
+}
+
+.editorContainer .editorMenuRight .btn-custom .up-arrow {
+  margin-bottom: 1px; /* centers the up/down arrow */
+}
+
+.editorContainer .editorMenuRight .btn-custom .down-arrow {
+  margin-top: 1px; /* centers the up/down arrow */
+}
+
+.editorContainer .btn-custom:hover,
+.editorContainer .btn-custom:focus {
+  background-color: #ffffff;
+  color: #707070;
+  border-color: #707070;
+}
+
+.editorContainer .btn-custom:active {
+  background-color: #0d6efd;
+  color: #ffffff;
+  border-color: #707070;
+}
+
+/* Top Menu */
+.editorMenuTop {
+  /* This should be the same as portraitUsLetter */
+  width: calc(var(--us-letter-width) * var(--us-letter-editor-scale));
+  padding-top: 15px;
+}
+
+.editorMenuTop .btn-custom {
+  background-color: #707070;
+  color: #ffffff;
+  margin-top: 10px;
+  margin-bottom: 10px;
+  margin-left: 5px;
+  margin-right: 5px;
+}
+
+.editorMenuTop .btn-custom:hover {
+  background-color: #ffffff;
+  color: #707070;
+  border-color: #707070;
+}
+
+.spelling-error {
+  color: red;
+}
+
+.grammar-error {
+  color: blue;
+}
+
+.signature-container {
+  background-color: #ffffff;
+}
+
+.signature-preview-image {
+  object-fit: scale-down;
+  width: 150px;
+}
+
+.iconSave {
+  height: 14px;
+}
+
+.missing-address-msg {
+  color: red;
+}
+
+.display-none {
+  display: none;
+}
+
+.button-focus:focus {
+  border: 2px solid #015ecc;
+}
+
+.question-mark {
+  border: 0px !important;
+  background-color: white !important;
+  color: #707070;
+}
+
+.question-mark-icon {
+  width: 20px;
+  margin-left: 0px;
+  margin-bottom: 10px;
+}
+
+.float-start .header {
+  display: flex;
+}
+
+/* starts_with / ends_with lock img css */
+.lock-container {
+  position: relative;
+}

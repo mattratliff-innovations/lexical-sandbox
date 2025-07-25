@@ -1,0 +1,386 @@
+@import url('@druid/druid/dist/esm/druid.css');
+
+:root {
+  --us-letter-width: 8.5in;
+  --us-letter-height: 11in;
+  --us-letter-font-family: 'Times New Roman', Times, serif;
+  --us-letter-font-size: 12pt;
+  --us-letter-line-height: 1.2; /* unitless to keep aspect ratio (without em). very close to 14pt */
+  --us-letter-editor-scale: 1.44; /* CSS scaling is different than PDF */
+  --us-letter-inline-pdf-scale: 138; /* PDF has its own scaling */
+}
+
+body {
+  margin: 0;
+  overflow-x: hidden;
+}
+
+a {
+  color: #0000ee;
+  font-style: normal;
+}
+a:hover {
+  color: #0000ee;
+}
+
+/* Skip Nav for 508 */
+#skip-nav {
+  position: absolute;
+  display: block;
+  top: 0;
+  left: 50%;
+  z-index: 50;
+  margin: 0 0 0 -75px;
+  padding: 3px 7px;
+  font-family: 'Verdana';
+  font-size: 12px;
+  height: 1px;
+  text-decoration: none;
+  overflow: hidden;
+  clip: 1px 1px 1px 1px;
+}
+
+#skip-nav:focus,
+#skip-nav:active {
+  color: white;
+  background: #4f4e4e;
+  border-bottom-right-radius: 5px;
+  border-bottom-left-radius: 5px;
+  border: 1px solid black;
+  height: auto;
+  outline: none;
+  overflow: visible;
+  clip: auto;
+}
+
+/* Application Footer Links */
+.app_link_footer a {
+  color: #0000ee;
+  text-decoration: none;
+  font-size: 0.9em;
+  line-height: 1.5;
+  display: block;
+}
+
+/* Application Name */
+.app_footer_description {
+  font-size: 1.2em;
+  font-weight: 500;
+  color: #2d4481;
+}
+
+/* LOGOS */
+.uscis_seal_header {
+  height: 70px;
+}
+
+.didit_logo_header {
+  height: 55px;
+}
+
+.didit_logo_footer {
+  height: 90px;
+}
+
+.scribe_logo_header {
+  height: 40px;
+}
+
+.scribe_logo_footer {
+  height: 35px;
+}
+
+.scribe_logo_div {
+  justify-content: center;
+}
+
+/* Main header vertical divider bar between DHS Seal & DIDit Logo */
+.header_vbar {
+  border-left: solid 3px var(--bs-gray-300);
+  font-size: 3em;
+}
+
+/* Prevents short page from having an oversized footer */
+.page_min_height {
+  min-height: 70vh;
+}
+
+/* CHECKBOX */
+.checkbox_wrapper {
+  vertical-align: middle;
+  border: 1px solid rgb(215, 213, 213);
+  border-radius: 8px !important;
+  padding: 11px 25px 11px 45px;
+  margin: 0;
+}
+.checkbox_lg .form-check-input {
+  top: 0.8rem;
+  scale: 1.5;
+  margin-right: 0.7rem;
+  border: 1px solid silver;
+  border-radius: 3px !important;
+}
+.checkbox_lg .form-check-label {
+  padding: 0 70px 0 5px;
+  scale: 1.1;
+}
+.checkbox_xl .form-check-input {
+  top: 1.1rem;
+  scale: 1.9;
+  margin-right: 0.8rem;
+  border: 1px solid silver;
+  border-radius: 4px !important;
+}
+.checkbox_xl .form-check-label {
+  padding: 0 60px 0 12px;
+  scale: 1.2;
+}
+
+/* LEGEND */
+legend {
+  border-bottom: 1px dashed silver;
+  margin-bottom: 1.2rem;
+  font-size: 1.8rem;
+}
+
+.App {
+  margin-top: 25px;
+  margin-bottom: 100px;
+}
+
+/* Main NavBar */
+.nav-item .scribe-text-primary.nav-link {
+  color: #2d4481;
+  font-size: 1.3em;
+  padding: 0 0 1px 0;
+}
+.nav-item .scribe-text-primary.nav-link:hover,
+.nav-item .scribe-text-primary.nav-link.active {
+  color: #2d4481;
+  border-bottom: 2px solid #a4d1e6;
+  padding: inherit;
+}
+.nav-item .scribe-text-primary.nav-link:not(.active) {
+  padding: inherit;
+}
+
+/* Horizontal Rules */
+hr.b1 {
+  border: 1px solid black;
+}
+
+hr.b2 {
+  border: 2px solid black;
+}
+
+hr.b3 {
+  border: 3px solid black;
+}
+
+.nowrap {
+  white-space: nowrap;
+}
+
+.text-upcase {
+  text-transform: uppercase;
+}
+
+.nav-tabs .nav-item .nav-link.active {
+  font-weight: bold;
+}
+
+.card:hover {
+  opacity: 0.8;
+  box-shadow:
+    0 5px 10px rgba(0, 0, 0, 0.3),
+    0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.required:after {
+  content: ' *';
+  color: red;
+}
+
+.adminListCreateButtonDiv {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+dr-card.contact-card::part(container) {
+  border-radius: 12px;
+  padding: 12px 8px 8px 0;
+}
+
+dr-card.receipt-card::part(container) {
+  border-radius: 12px;
+  border: solid 2px #000000;
+  padding: 12px;
+  min-width: 292px;
+  min-height: 127px;
+}
+
+/* Place at bottom to overwrite defaults at top.
+The scaling of the letter editor is done per popular monitor resolution breakpoints. Users' monitor resolutions
+maybe their laptops screen including connecting monitor(s). For that reason we need more breakpoints than we would
+otherwise like. Also, the appropriate way to test monitor resolution is to change the monitor resolution as opposed to
+doing browser-zooming because the resulting resolution is deceiving and also scales the PDF incorrectly. The equation for
+the browser width in pixel is "monitor-resolution/zoom OR 1920/1.25=1536pixels for a 125% zoom. */
+@media (max-width: 1780px) {
+  :root {
+    --us-letter-editor-scale: 1.34; /* CSS scaling is different than PDF */
+    --us-letter-inline-pdf-scale: 129; /* PDF has its own scaling */
+  }
+}
+@media (max-width: 1680px) {
+  :root {
+    --us-letter-editor-scale: 1.26;
+    --us-letter-inline-pdf-scale: 120;
+  }
+}
+@media (max-width: 1536px) {
+  :root {
+    --us-letter-editor-scale: 1.2;
+    --us-letter-inline-pdf-scale: 115;
+  }
+}
+@media (max-width: 1440px) {
+  :root {
+    --us-letter-editor-scale: 1.15;
+    --us-letter-inline-pdf-scale: 105;
+  }
+  .scribe_logo_div {
+    justify-content: flex-start;
+  }
+}
+@media (max-width: 1366px) {
+  :root {
+    --us-letter-editor-scale: 1.1;
+    --us-letter-inline-pdf-scale: 100;
+  }
+  .scribe_logo_div {
+    justify-content: flex-start;
+  }
+}
+@media (max-width: 1280px) {
+  :root {
+    --us-letter-editor-scale: 1;
+    --us-letter-inline-pdf-scale: 95;
+  }
+  .scribe_logo_div {
+    justify-content: flex-start;
+  }
+}
+
+/* Hide element(s) for Large (lg) and Extra Large (xl) */
+@media (max-width: 1280px) {
+  .hide_on_xlarge {
+    display: none;
+  }
+}
+@media (max-width: 1200px) {
+  .hide_on_large {
+    display: none;
+  }
+}
+
+dr-card.admin-card::part(container) {
+  border-radius: 20px;
+  border: 2px solid 707070;
+  height: 170px;
+}
+
+dr-card.admin-card::part(container):hover {
+  background-color: #336cbc;
+  color: #ffffff;
+}
+
+dr-card.admin-card:hover::part(mediaContainer) {
+  color: #ffffff;
+  opacity: 50%;
+}
+
+dr-card.admin-card::part(contentContainer) {
+  border-left: 2px solid #eeeeee;
+  padding: 0 32px 0 32px;
+}
+
+dr-card.admin-card::part(content) {
+  font-size: 14px;
+}
+
+dr-card.admin-card::part(mediaContainer) {
+  color: #336cbc;
+}
+
+.modal {
+  --bs-modal-border-radius: 23px !important;
+}
+
+.sidebar {
+  position: sticky;
+  top: 24px;
+}
+
+.sidebar-margin {
+  margin-top: 40px;
+}
+
+.side-menu {
+  background-color: #eeeeee;
+}
+
+.labeled-checkbox {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+}
+
+.labeled-checkbox label.form-check-label {
+  padding-left: 10px;
+}
+
+.labeled-checkbox caption {
+  white-space: nowrap;
+  padding: 0px;
+  font-size: 12px;
+}
+
+.admin-header h1 {
+  margin-bottom: 0px;
+}
+
+hr.b3 {
+  border: 3px solid #223b72;
+}
+
+dr-button.btn-size::part(button) {
+  width: 134px;
+  min-height: 48px;
+  padding: 12px 0px;
+}
+
+dr-table::part(title) {
+  margin-bottom: 0px;
+}
+
+dr-table.h1size::part(title) {
+  font-size: 33px;
+}
+
+.noMarginHeader {
+  margin-bottom: 0px;
+}
+
+dr-table::part(caption) {
+  padding-bottom: 0px;
+}
+
+.rbt-input-main {
+  border-radius: 0px;
+  border: #707070 2px solid;
+}
+
+.checkbox-150 {
+  transform: scale(1.5);
+}
