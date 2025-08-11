@@ -285,26 +285,24 @@ export function useEndnotePlugin(handleSetSelectedText, handleSetCanCreateEndnot
     const updateEndnote = (footnoteId, newValue) => {
       editor.update(() => {
         const root = $getRoot();
-        const allNodes = root.getChildren();
         
         // Recursively search for endnote nodes
-        const findAndUpdateEndnote = (nodes) => {
-          for (const node of nodes) {
-            if ($isEndnoteNode(node) && node.getEndnoteId() === footnoteId) {
-              node.setEndnoteValue(newValue);
+        const findAndUpdateEndnote = (node) => {
+          if ($isEndnoteNode(node) && node.getEndnoteId() === footnoteId) {
+            node.setEndnoteValue(newValue);
+            return true;
+          }
+          
+          const children = node.getChildren ? node.getChildren() : [];
+          for (const child of children) {
+            if (findAndUpdateEndnote(child)) {
               return true;
-            }
-            if (node.getChildren) {
-              const children = node.getChildren();
-              if (findAndUpdateEndnote(children)) {
-                return true;
-              }
             }
           }
           return false;
         };
 
-        findAndUpdateEndnote(allNodes);
+        findAndUpdateEndnote(root);
       });
     };
 

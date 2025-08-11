@@ -67,22 +67,27 @@ export default function AddEndnoteModal({
   useEffect(() => {
     if (showAddEndnoteModal) {
       if (currentEndnote) {
-        // Editing existing endnote
-        setSelectedWord(typeof currentEndnote.getTextContent === 'function' 
-          ? currentEndnote.getTextContent() 
-          : currentEndnote.text || '');
-        setEndnoteValue(typeof currentEndnote.getEndnoteValue === 'function' 
-          ? currentEndnote.getEndnoteValue() 
-          : currentEndnote.value || '');
+        // Editing existing endnote - get data from the currentEndnote object
+        const endnoteText = currentEndnote.__text || 
+                           (typeof currentEndnote.getTextContent === 'function' ? currentEndnote.getTextContent() : '') ||
+                           currentEndnote.text || '';
+        const endnoteValue = currentEndnote.__endnoteValue ||
+                            (typeof currentEndnote.getEndnoteValue === 'function' ? currentEndnote.getEndnoteValue() : '') ||
+                            currentEndnote.value || '';
+        
+        setSelectedWord(endnoteText);
+        setEndnoteValue(endnoteValue);
       } else {
-        // Creating new endnote
-        editor.getEditorState().read(() => {
-          const selection = editor.getEditorState()._selection;
-          if (selection) {
-            const selectedText = selection.getTextContent();
-            setSelectedWord(selectedText || '');
-          }
-        });
+        // Creating new endnote - get selected text from editor
+        if (editor) {
+          editor.getEditorState().read(() => {
+            const selection = editor.getEditorState()._selection;
+            if (selection) {
+              const selectedText = selection.getTextContent();
+              setSelectedWord(selectedText || '');
+            }
+          });
+        }
         setEndnoteValue('');
       }
     }
@@ -97,9 +102,9 @@ export default function AddEndnoteModal({
   }, [showAddEndnoteModal]);
 
   const handleSubmit = () => {
-    if (currentEndnote && typeof currentEndnote.getEndnoteId === 'function') {
+    if (currentEndnote && (currentEndnote.__footnoteId || (typeof currentEndnote.getEndnoteId === 'function'))) {
       // Update existing endnote
-      const endnoteId = currentEndnote.getEndnoteId();
+      const endnoteId = currentEndnote.__footnoteId || currentEndnote.getEndnoteId();
       if (window.updateEndnote) {
         window.updateEndnote(endnoteId, endnoteValue);
       }
