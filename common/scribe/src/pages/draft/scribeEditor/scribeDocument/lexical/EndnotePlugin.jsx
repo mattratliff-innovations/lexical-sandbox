@@ -1,4 +1,4 @@
-// FootnotePlugin.jsx
+// EndnotePlugin.jsx
 import { $createTextNode, $getSelection, $isRangeSelection, $isTextNode, TextNode, COMMAND_PRIORITY_LOW, $getRoot } from 'lexical';
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
 import { useEffect } from 'react';
@@ -15,12 +15,13 @@ export class EndnoteNode extends TextNode {
   }
 
   static clone(node) {
-    return new EndnoteNode(node.__text, node.__footnoteId, node.__key);
+    return new EndnoteNode(node.__text, node.__footnoteId, node.__endnoteValue, node.__key);
   }
 
-  constructor(text, footnoteId, key) {
+  constructor(text, footnoteId, endnoteValue = '', key) {
     super(text, key);
     this.__footnoteId = footnoteId;
+    this.__endnoteValue = endnoteValue;
   }
 
   getEndnoteId() {
@@ -32,22 +33,42 @@ export class EndnoteNode extends TextNode {
     writable.__footnoteId = footnoteId;
   }
 
+  getEndnoteValue() {
+    return this.__endnoteValue;
+  }
+
+  setEndnoteValue(endnoteValue) {
+    const writable = this.getWritable();
+    writable.__endnoteValue = endnoteValue;
+  }
+
   createDOM(config) {
     const element = super.createDOM(config);
     element.style.cursor = 'pointer';
+    element.style.backgroundColor = '#ffeb3b';
+    element.style.padding = '1px 2px';
 
     // Add footnote number indicator
     const footnoteIndicator = document.createElement('sup');
     footnoteIndicator.textContent = `[${this.__footnoteId}]`;
     footnoteIndicator.style.fontSize = '0.65em';
     footnoteIndicator.style.marginLeft = '2px';
+    footnoteIndicator.style.color = '#1976d2';
     element.appendChild(footnoteIndicator);
 
     // Add click handler to show footnote modal
     element.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
-      this.showEndnoteModal(element, this.__text, this.__footnoteId);
+      // Trigger custom event to show modal with this endnote
+      const event = new CustomEvent('showEndnoteModal', {
+        detail: {
+          id: this.__footnoteId,
+          text: this.__text,
+          value: this.__endnoteValue
+        }
+      });
+      document.dispatchEvent(event);
     });
 
     return element;
@@ -59,34 +80,61 @@ export class EndnoteNode extends TextNode {
       // Update footnote indicator
       const indicator = dom.querySelector('sup');
       if (indicator) {
-        indicator.textContent = this.__footnoteId;
+        indicator.textContent = `[${this.__footnoteId}]`;
       }
     }
     return updated;
   }
 
   static importJSON(serializedNode) {
-    const { text, footnoteId } = serializedNode;
-    // eslint-disable-next-line no-use-before-define
-    return $createEndnoteNode(text, footnoteId);
+    const { text, footnoteId, endnoteValue } = serializedNode;
+    return $createEndnoteNode(text, footnoteId, endnoteValue);
   }
 
   exportJSON() {
     return {
       ...super.exportJSON(),
       footnoteId: this.__footnoteId,
+      endnoteValue: this.__endnoteValue,
       type: 'footnote',
       version: 1,
     };
   }
 }
 
-export function $createEndnoteNode(text, footnoteId) {
-  return new EndnoteNode(text, footnoteId);
+export function $createEndnoteNode(text, footnoteId, endnoteValue = '') {
+  return new EndnoteNode(text, footnoteId, endnoteValue);
 }
 
 export function $isEndnoteNode(node) {
   return node instanceof EndnoteNode;
+}
+
+// Helper function to get the currently selected endnote node
+function $getSelectedEndnoteNode(selection) {
+  if (!$isRangeSelection(selection)) {
+    return null;
+  }
+
+  const nodes = selection.getNodes();
+  for (const node of nodes) {
+    if ($isEndnoteNode(node)) {
+      return node;
+    }
+    // Check if cursor is within an endnote node
+    const parent = node.getParent();
+    if (parent && $isEndnoteNode(parent)) {
+      return parent;
+    }
+  }
+
+  // Check if cursor is positioned within an endnote
+  const anchorNode = selection.anchor.getNode();
+  if ($isEndnoteNode(anchorNode)) {
+    return anchorNode;
+  }
+
+  return null;
 }
 
 // Helper function to check if cursor is on a word
@@ -123,7 +171,7 @@ function $isOnWord(selection) {
 }
 
 // Hook to register the footnote plugin
-export function useEndnotePlugin(handleSetSelectedText, handleSetCanCreateEndnote) {
+export function useEndnotePlugin(handleSetSelectedText, handleSetCanCreateEndnote, handleSetCurrentEndnote) {
   const [editor] = useLexicalComposerContext();
 
   useEffect(() => {
@@ -149,13 +197,15 @@ export function useEndnotePlugin(handleSetSelectedText, handleSetCanCreateEndnot
         if ($isRangeSelection(selection)) {
           const selectedText = selection.getTextContent();
           const canCreateEndnote = $isOnWord(selection);
-          console.log(canCreateEndnote);
+          const currentEndnoteNode = $getSelectedEndnoteNode(selection);
 
           handleSetSelectedText(selectedText);
           handleSetCanCreateEndnote(canCreateEndnote);
+          handleSetCurrentEndnote(currentEndnoteNode);
         } else {
           handleSetSelectedText('');
           handleSetCanCreateEndnote(false);
+          handleSetCurrentEndnote(null);
         }
       });
     };
@@ -171,7 +221,7 @@ export function useEndnotePlugin(handleSetSelectedText, handleSetCanCreateEndnot
       if (timeoutId) clearTimeout(timeoutId);
       removeUpdateListener();
     };
-  }, [editor, handleSetSelectedText, handleSetCanCreateEndnote]);
+  }, [editor, handleSetSelectedText, handleSetCanCreateEndnote, handleSetCurrentEndnote]);
 
   useEffect(() => {
     if (!editor) return;
@@ -181,7 +231,7 @@ export function useEndnotePlugin(handleSetSelectedText, handleSetCanCreateEndnot
 
     let footnoteCounter = 1;
 
-    const insertEndnote = () => {
+    const insertEndnote = (endnoteValue = '') => {
       editor.update(() => {
         const selection = $getSelection();
 
@@ -190,7 +240,6 @@ export function useEndnotePlugin(handleSetSelectedText, handleSetCanCreateEndnot
         }
 
         const selectedText = selection.getTextContent();
-        console.log('selectedTExt = ', selectedText);
 
         if (selectedText.trim() === '') {
           // If no text is selected, try to select the word at cursor
@@ -227,7 +276,7 @@ export function useEndnotePlugin(handleSetSelectedText, handleSetCanCreateEndnot
                 nodes.push($createTextNode(beforeText));
               }
 
-              nodes.push($createEndnoteNode(wordText, footnoteCounter++));
+              nodes.push($createEndnoteNode(wordText, footnoteCounter++, endnoteValue));
 
               if (afterText) {
                 nodes.push($createTextNode(afterText));
@@ -243,24 +292,52 @@ export function useEndnotePlugin(handleSetSelectedText, handleSetCanCreateEndnot
           }
         } else {
           // Replace selected text with footnote node
-          const footnoteNode = $createEndnoteNode(selectedText, footnoteCounter++);
+          const footnoteNode = $createEndnoteNode(selectedText, footnoteCounter++, endnoteValue);
           selection.insertNodes([footnoteNode]);
         }
       });
     };
 
+    const updateEndnote = (footnoteId, newValue) => {
+      editor.update(() => {
+        const root = $getRoot();
+        const allNodes = root.getChildren();
+        
+        // Recursively search for endnote nodes
+        const findAndUpdateEndnote = (nodes) => {
+          for (const node of nodes) {
+            if ($isEndnoteNode(node) && node.getEndnoteId() === footnoteId) {
+              node.setEndnoteValue(newValue);
+              return true;
+            }
+            if (node.getChildren) {
+              const children = node.getChildren();
+              if (findAndUpdateEndnote(children)) {
+                return true;
+              }
+            }
+          }
+          return false;
+        };
+
+        findAndUpdateEndnote(allNodes);
+      });
+    };
+
+    // Store the update function globally for access from modal
+    window.updateEndnote = updateEndnote;
+
     const removeListeners = mergeRegister(
       editor.registerCommand(
         INSERT_FOOTNOTE_COMMAND,
-        () => {
-          insertEndnote();
+        (endnoteValue) => {
+          insertEndnote(endnoteValue);
           return true;
         },
         COMMAND_PRIORITY_LOW
       )
     );
 
-    // eslint-disable-next-line consistent-return
     return removeListeners;
   }, [editor]);
 

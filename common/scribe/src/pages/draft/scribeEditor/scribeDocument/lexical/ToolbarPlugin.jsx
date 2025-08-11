@@ -24,6 +24,7 @@ import {
   ChevronDown,
   ChevronUp,
   TextCenter,
+  Journal,
 } from 'react-bootstrap-icons';
 import { KeyboardDoubleArrowDown, KeyboardDoubleArrowUp } from '@mui/icons-material';
 import styled from '@emotion/styled/macro';
@@ -120,6 +121,7 @@ export default function ToolbarPlugin({
   alignMenuAnchor = {},
   setAlignMenuAnchor = () => {},
   canCreateEndnote = false,
+  currentEndnote = null,
   tableCreatorAnchor = {},
   setTableCreatorAnchor = () => {},
   editorId,
@@ -191,6 +193,16 @@ export default function ToolbarPlugin({
       const event = new ClipboardEvent('paste', { clipboardData: data });
       dispatchAction(PASTE_COMMAND, event);
     });
+  };
+
+  const handleEndnoteAction = () => {
+    if (currentEndnote) {
+      // If we're on an existing endnote, show the modal to edit it
+      setShowAddEndnoteModal(true);
+    } else if (canCreateEndnote) {
+      // If we can create a new endnote, show the modal to create it
+      setShowAddEndnoteModal(true);
+    }
   };
 
   const alignBtns = {
@@ -339,11 +351,11 @@ export default function ToolbarPlugin({
     },
     endnote: {
       id: 'endnote',
-      title: 'Add Footnote',
-      ariaLabel: 'Add Footnote',
-      readonly: !canCreateEndnote,
-      icon: <ArrowDownRightSquareFill />,
-      action: () => setShowAddEndnoteModal(true),
+      title: currentEndnote ? 'Edit Endnote' : 'Add Endnote',
+      ariaLabel: currentEndnote ? 'Edit Endnote' : 'Add Endnote',
+      readonly: !canCreateEndnote && !currentEndnote,
+      icon: <Journal />,
+      action: handleEndnoteAction,
     },
   };
 
@@ -508,5 +520,6 @@ ToolbarPlugin.propTypes = {
   tableCreatorAnchor: PropTypes.shape({}),
   setTableCreatorAnchor: PropTypes.func,
   canCreateEndnote: PropTypes.bool,
+  currentEndnote: PropTypes.shape({}),
   minToolBarDefault: PropTypes.bool.isRequired,
 };

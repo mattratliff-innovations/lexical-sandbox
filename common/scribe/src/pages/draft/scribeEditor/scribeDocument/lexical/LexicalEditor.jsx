@@ -86,8 +86,8 @@ TableNode.importJSON = (serializedNode) => {
   return node;
 };
 
-function EndnotePluginWrapper({ handleSetSelectedText, handleSetCanCreateEndnote }) {
-  useEndnotePlugin(handleSetSelectedText, handleSetCanCreateEndnote);
+function EndnotePluginWrapper({ handleSetSelectedText, handleSetCanCreateEndnote, handleSetCurrentEndnote }) {
+  useEndnotePlugin(handleSetSelectedText, handleSetCanCreateEndnote, handleSetCurrentEndnote);
   return null;
 }
 
@@ -121,6 +121,7 @@ export default function LexicalEditor({
 
   const [selectedText, setSelectedText] = useState('');
   const [canCreateEndnote, setCanCreateEndnote] = useState(false);
+  const [currentEndnote, setCurrentEndnote] = useState(null);
 
   const [editorReady, setEditorReady] = useState(false);
   const editorRef = useRef(null);
@@ -135,6 +136,28 @@ export default function LexicalEditor({
 
   const handleSetCanCreateEndnote = useCallback((canCreate) => {
     setCanCreateEndnote(canCreate);
+  }, []);
+
+  const handleSetCurrentEndnote = useCallback((endnoteNode) => {
+    setCurrentEndnote(endnoteNode);
+  }, []);
+
+  // Add event listener for endnote click events
+  useEffect(() => {
+    const handleEndnoteModalShow = (event) => {
+      const { id, text, value } = event.detail;
+      setCurrentEndnote({ 
+        getEndnoteId: () => id, 
+        getTextContent: () => text, 
+        getEndnoteValue: () => value 
+      });
+      setShowAddEndnoteModal(true);
+    };
+
+    document.addEventListener('showEndnoteModal', handleEndnoteModalShow);
+    return () => {
+      document.removeEventListener('showEndnoteModal', handleEndnoteModalShow);
+    };
   }, []);
 
   // Memoized handlers
@@ -291,7 +314,8 @@ export default function LexicalEditor({
               editorId={id}
               alignMenuAnchor={alignMenuAnchor}
               setAlignMenuAnchor={setAlignMenuAnchor}
-              canCreateEndnote={canCreateEndnote}
+              canCreateEndnote={canCreateEndnote || !!currentEndnote}
+              currentEndnote={currentEndnote}
               tableCreatorAnchor={tableCreatorAnchor}
               setTableCreatorAnchor={setTableCreatorAnchor}
               minToolBarDefault={!!type.includes('4admin')}
@@ -327,7 +351,11 @@ export default function LexicalEditor({
             {false && <TreeViewPlugin />}
 
             <ListPlugin />
-            <EndnotePluginWrapper handleSetSelectedText={handleSetSelectedText} handleSetCanCreateEndnote={handleSetCanCreateEndnote} />
+            <EndnotePluginWrapper 
+              handleSetSelectedText={handleSetSelectedText} 
+              handleSetCanCreateEndnote={handleSetCanCreateEndnote}
+              handleSetCurrentEndnote={handleSetCurrentEndnote}
+            />
           </TextEditorArea>
         </EditorContainer>
 
@@ -350,7 +378,11 @@ export default function LexicalEditor({
         )}
 
         <AddContentModal showAddContentModal={showAddContentModal} setShowAddContentModal={setShowAddContentModal} />
-        <AddEndnoteModal showAddEndnoteModal={showAddEndnoteModal} setShowAddEndnoteModal={setShowAddEndnoteModal} />
+        <AddEndnoteModal 
+          showAddEndnoteModal={showAddEndnoteModal} 
+          setShowAddEndnoteModal={setShowAddEndnoteModal}
+          currentEndnote={currentEndnote}
+        />
       </LexicalComposer>
     </div>
   );

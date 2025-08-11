@@ -16,7 +16,7 @@ import VariablePlugin, { showVariableValues, hydrateVariablesHeadlessly } from '
 import { exportLexicalHtml } from './lexical/lexicalUtil';
 import './ScribeDocument.css';
 import SnippetPlugin from './lexical/letterEditor/plugins/SnippetPlugin';
-import { getEnclosuresHtml, getEndNotesHtml } from '../../LetterUtil';
+import { getEnclosuresHtml, getEndNotesHtml, extractEndnotesFromHtml } from '../../LetterUtil';
 
 const EditorSection = styled.div``;
 
@@ -56,6 +56,36 @@ const ScribeDocument = forwardRef(
 
     const renderHeader = () => <Header draft={draftState} totalPageCount={estimatePrintPages()} useLexical />;
 
+    // Helper function to extract endnotes from all editor content
+    const extractAllEndnotes = () => {
+      const allEndnotes = [];
+      let endnoteIdCounter = {};
+
+      // Extract from starts-with editor
+      const startsWithHtml = exportLexicalHtml(editorsRef.current['starts-with-editor']);
+      const startsWithEndnotes = extractEndnotesFromHtml(startsWithHtml);
+      allEndnotes.push(...startsWithEndnotes);
+
+      // Extract from section editors
+      draftState.sections.forEach((section) => {
+        const sectionHtml = exportLexicalHtml(editorsRef.current[section.frontEndId]);
+        const sectionEndnotes = extractEndnotesFromHtml(sectionHtml);
+        allEndnotes.push(...sectionEndnotes);
+      });
+
+      // Extract from ends-with editor
+      const endsWithHtml = exportLexicalHtml(editorsRef.current['ends-with-editor']);
+      const endsWithEndnotes = extractEndnotesFromHtml(endsWithHtml);
+      allEndnotes.push(...endsWithEndnotes);
+
+      // Remove duplicates and sort by index
+      const uniqueEndnotes = allEndnotes.filter((endnote, index, self) => 
+        index === self.findIndex(e => e.index === endnote.index)
+      );
+
+      return uniqueEndnotes.sort((a, b) => parseInt(a.index) - parseInt(b.index));
+    };
+
     const letterHtml = () => {
       const hydratedLetterHeader = renderToStaticMarkup(renderHeader());
       const startsWithHtml = exportLexicalHtml(editorsRef.current['starts-with-editor']);
@@ -67,16 +97,17 @@ const ScribeDocument = forwardRef(
 
       const enclosuresHtml = renderToStaticMarkup(getEnclosuresHtml(draftState?.enclosures || []));
 
-      const endNotesHtml = renderToStaticMarkup(getEndNotesHtml(draftState?.endNotes || []));
+      // Extract all endnotes from the content
+      const allEndnotes = extractAllEndnotes();
+      const endNotesHtml = renderToStaticMarkup(getEndNotesHtml(allEndnotes));
 
-      
       return `${hydratedLetterHeader}
         <div data-testid="startsWithHtml">${startsWithHtml}</div>
         <div data-testid="sectionsHtml">${sectionsHtml}</div>
         <div data-testid="endsWithHtml">${endsWithHtml}</div>
         <div data-testid="signature">${signature}</div>
         <div data-testid="enclosure">${enclosuresHtml}</div>
-        <div data-testid="enclosure">${endNotesHtml}</div>`;
+        <div data-testid="endnotes">${endNotesHtml}</div>`;
     };
 
     const letterDraftData = () => {
@@ -94,6 +125,16 @@ const ScribeDocument = forwardRef(
         };
       });
 
+      // Extract endnotes for storage
+      const allEndnotes = extractAllEndnotes();
+
+      const draftData = {
+        sectionsAttributes: formattedSections,
+        startsWith: exportLexicalHtml(editorsRef.current['starts-with-editor']),
+        endsWith: exportLexicalHtml(editorsRef.current['ends-with-editor']),
+        endNotes: allEndnotes, // Add endnotes to draft data
+      };
+
       if (showDocumentHeader) {
         const hydratedHeaders = HEADER_ROW_COL_LIST.reduce(
           (resultMap, rowCol) => ({
@@ -105,16 +146,11 @@ const ScribeDocument = forwardRef(
 
         return {
           ...hydratedHeaders,
-          sectionsAttributes: formattedSections,
-          startsWith: exportLexicalHtml(editorsRef.current['starts-with-editor']),
-          endsWith: exportLexicalHtml(editorsRef.current['ends-with-editor']),
+          ...draftData,
         };
       }
-      return {
-        sectionsAttributes: formattedSections,
-        startsWith: exportLexicalHtml(editorsRef.current['starts-with-editor']),
-        endsWith: exportLexicalHtml(editorsRef.current['ends-with-editor']),
-      };
+
+      return draftData;
     };
 
     useImperativeHandle(ref, () => ({
@@ -230,6 +266,12 @@ const ScribeDocument = forwardRef(
       setOrganizationSignature(findOrganizationSignature(draft));
     }, [draft]);
 
+    // Extract and display endnotes dynamically
+    const displayEndnotes = () => {
+      const allEndnotes = extractAllEndnotes();
+      return getEndNotesHtml(allEndnotes);
+    };
+
     return (
       <DataContext.Provider value={contextValue}>
         <div className="portraitUsLetter" ref={portraitUsLetterRef} data-testid="portraitUsLetter">
@@ -296,7 +338,7 @@ const ScribeDocument = forwardRef(
 
             {getEnclosuresHtml(draft?.enclosures)}
             
-            {getEndNotesHtml(draftState.endNotes)}
+            {displayEndnotes()}
           </div>
 
           <div className="bottomMarginPlaceholder" data-testid="bottomMarginPlaceholder" style={{ height: `${draftState.marginBottom}px` }} />

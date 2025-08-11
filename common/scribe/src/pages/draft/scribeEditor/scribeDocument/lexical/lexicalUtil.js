@@ -95,6 +95,17 @@ const addCustomHtmlStyles = (html, tableAlignments, tableWidths = [], tableColum
   });
 };
 
+// Custom HTML transformer for EndnoteNode
+const addEndnoteAttributes = (html) => {
+  // This function adds proper attributes to endnote spans for extraction
+  return html.replace(/<span([^>]*class="[^"]*footnote[^"]*"[^>]*)>([^<]*)<sup>\[(\d+)\]<\/sup><\/span>/g, 
+    (match, attributes, text, id) => {
+      // Extract existing attributes and add our custom ones
+      return `<span${attributes} data-footnote-id="${id}" data-endnote-text="${text.trim()}" data-endnote-value="">${text}<sup>[${id}]</sup></span>`;
+    }
+  );
+};
+
 export const exportLexicalHtml = (editor) => {
   if (editor === undefined) return '';
   let html = '';
@@ -107,7 +118,13 @@ export const exportLexicalHtml = (editor) => {
   const tableWidths = getTableWidths(editor);
   const tableColumnWidths = getTableColumnWidths(editor);
 
-  return addCustomHtmlStyles(html, tableAlignments, tableWidths, tableColumnWidths);
+  // Apply table styles
+  html = addCustomHtmlStyles(html, tableAlignments, tableWidths, tableColumnWidths);
+  
+  // Add endnote attributes for proper extraction
+  html = addEndnoteAttributes(html);
+
+  return html;
 };
 
 export const importLexicalHtml = (editor, value) => {

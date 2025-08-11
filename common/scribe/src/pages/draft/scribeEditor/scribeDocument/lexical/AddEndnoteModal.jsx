@@ -1,233 +1,183 @@
-/* eslint-disable require-loading-check-for-axios */
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
-import { DrButton, DrIcon } from '@druid/druid';
-import { toast, Flip } from 'react-toastify';
-import { v4 as uuidv4 } from 'uuid';
-import { $generateNodesFromDOM } from '@lexical/html';
+import { DrButton } from '@druid/druid';
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
-import { $getSelection, $setSelection } from 'lexical';
-import { useDataContext } from '../DataContext';
-import SnippetGroupSelector from './SnippetGroupSelector';
-import StandardParagraphSelector from './StandardParagraphSelector';
-import { Body, HeaderContainer } from '../../../../util/modalDesignComponents';
-import { HrNoTopMargin, BtnContainer, StyledLabel, StyledNote } from '../../../../../components/designedComponents';
-import { ContentContainer } from './AddEndnoteModalDesignComponents';
-import { H1 } from '../../../../../components/typography';
-import { createAuthenticatedAxios, APP_API_ENDPOINT } from '../../../../../http/authenticatedAxios';
+import styled from '@emotion/styled';
+import { INSERT_FOOTNOTE_COMMAND } from './EndnotePlugin';
 import { ScribeModal, XCloseBtn } from '../../../../../components/ScribeComponents';
-import AddEndnoteButton from '../../../../../assets/icon-endnotes.svg';
-import AsteriskButton from '../../../../../assets/icon-asterisk.svg';
+import { H1 } from '../../../../../components/typography';
+import { HeaderContainer, Body, Footer } from '../../../../util/modalDesignComponents';
+import { HrNoTopMargin } from '../../../../../components/designedComponents';
 
-export default function AddEndnoteModal({ showAddEndnoteModal, setShowAddEndnoteModal }) {
-  const axios = createAuthenticatedAxios();
-  const { draftState, setDraftState } = useDataContext();
+const BtnContainer = styled.div`
+  display: flex;
+  gap: 24px;
+`;
+
+const TextArea = styled.textarea`
+  width: 100%;
+  min-height: 120px;
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 14px;
+  resize: vertical;
+
+  &:focus {
+    outline: none;
+    border-color: #007bff;
+    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+  }
+`;
+
+const Label = styled.label`
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 500;
+  color: #333;
+`;
+
+const WordDisplay = styled.div`
+  background-color: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  padding: 8px 12px;
+  margin-bottom: 16px;
+  font-family: monospace;
+  font-size: 14px;
+`;
+
+const WordLabel = styled.div`
+  font-size: 12px;
+  color: #6c757d;
+  margin-bottom: 4px;
+`;
+
+export default function AddEndnoteModal({ 
+  showAddEndnoteModal, 
+  setShowAddEndnoteModal,
+  currentEndnote = null 
+}) {
   const [editor] = useLexicalComposerContext();
+  const [endnoteValue, setEndnoteValue] = useState('');
+  const [selectedWord, setSelectedWord] = useState('');
 
-  const [snippetGroupListData, setSnippetGroupListData] = useState([]);
-  const [showSnippetGroupList, setShowSnippetGroupList] = useState(false);
-  const [standardParagraphListData, setStandardParagraphListData] = useState([]);
-  const [showStandardParagraphList, setShowStandardParagraphList] = useState(false);
-  const [contentToInsert, setContentToInsert] = useState();
-  const [addBtnDisabled, setAddBtnDisabled] = useState(true);
-  const [contentIsLocked, setContentIsLocked] = useState(false);
-  const [endNoteDisabled, setEndNoteDisabled] = useState(true);
+  // Effect to populate modal when opened
+  useEffect(() => {
+    if (showAddEndnoteModal) {
+      if (currentEndnote) {
+        // Editing existing endnote
+        setSelectedWord(typeof currentEndnote.getTextContent === 'function' 
+          ? currentEndnote.getTextContent() 
+          : currentEndnote.text || '');
+        setEndnoteValue(typeof currentEndnote.getEndnoteValue === 'function' 
+          ? currentEndnote.getEndnoteValue() 
+          : currentEndnote.value || '');
+      } else {
+        // Creating new endnote
+        editor.getEditorState().read(() => {
+          const selection = editor.getEditorState()._selection;
+          if (selection) {
+            const selectedText = selection.getTextContent();
+            setSelectedWord(selectedText || '');
+          }
+        });
+        setEndnoteValue('');
+      }
+    }
+  }, [showAddEndnoteModal, currentEndnote, editor]);
 
-  const handleInsert = (textToInsert) => {
-    editor.focus(); // editor needs to regain focus
-    editor.update(() => {
-      const selection = $getSelection();
-      const clonedSelection = selection.clone(); // Clone now to avoid the frozen selection object
-      $setSelection(clonedSelection);
-      const parser = new DOMParser();
-      const dom = parser.parseFromString(textToInsert, 'text/html');
-      const nodes = $generateNodesFromDOM(editor, dom);
-      $getSelection()?.insertNodes(nodes);
-    });
-  };
+  // Clear form when modal closes
+  useEffect(() => {
+    if (!showAddEndnoteModal) {
+      setEndnoteValue('');
+      setSelectedWord('');
+    }
+  }, [showAddEndnoteModal]);
 
-  const insertText = () => {
-    if (contentIsLocked) {
-      // only for locked paragraph and in draft
-      const newSection = {
-        id: null,
-        frontEndId: uuidv4(),
-        text: contentToInsert,
-        locked: true,
-      };
-
-      const nextSections = [...draftState.sections, newSection];
-      setDraftState((currentDraftState) => ({
-        ...currentDraftState,
-        sections: nextSections,
-      }));
-    } else handleInsert(contentToInsert);
-
+  const handleSubmit = () => {
+    if (currentEndnote && typeof currentEndnote.getEndnoteId === 'function') {
+      // Update existing endnote
+      const endnoteId = currentEndnote.getEndnoteId();
+      if (window.updateEndnote) {
+        window.updateEndnote(endnoteId, endnoteValue);
+      }
+    } else {
+      // Create new endnote
+      editor.dispatchCommand(INSERT_FOOTNOTE_COMMAND, endnoteValue);
+    }
+    
     setShowAddEndnoteModal(false);
   };
 
-  function getSnippetGroupsForDraft() {
-    axios
-      .get(`${APP_API_ENDPOINT}/snippet_groups/snippet_groups_for_letter_type`, {
-        params: {
-          letter_type_id: draftState?.letterTypeId,
-          form_type_code: draftState?.registration?.formTypeName,
-        },
-      })
-      .then((response) => setSnippetGroupListData(response.data))
-      .catch(() => {
-        toast.error('There was an error retrieving the Snippets', {
-          position: 'top-center',
-          transition: Flip,
-          theme: 'dark',
-        });
-      });
-  }
-
-  function getAllSnippetsGroups() {
-    axios
-      .get(`${APP_API_ENDPOINT}/snippet_groups`)
-      .then((response) => setSnippetGroupListData(response.data))
-      .catch(() => {
-        toast.error('There was an error retrieving the Snippet Groups', {
-          position: 'top-center',
-          transition: Flip,
-          theme: 'dark',
-        });
-      });
-  }
-
-  useEffect(() => {
-    if (draftState) getSnippetGroupsForDraft();
-    else getAllSnippetsGroups();
-  }, []);
-
-  useEffect(() => {
-    axios
-      .get(`${APP_API_ENDPOINT}/standard_paragraphs/available_standard_paragraphs_form_letter_type`, {
-        params: {
-          letter_type_id: draftState?.letterTypeId,
-          form_type_code: draftState?.registration?.formTypeName,
-        },
-      })
-      .then((response) => {
-        const sortedParagraphs = response.data.sort((a, b) => a.code.localeCompare(b.code));
-        setStandardParagraphListData(sortedParagraphs);
-      })
-      .catch(() => {
-        toast.error('There was an error retrieving the Standard Paragraph list', {
-          position: 'top-center',
-          transition: Flip,
-          theme: 'dark',
-        });
-      });
-  }, [draftState?.letterTypeId, draftState?.registration?.formTypeName]);
-
-  const displaySnippetGroupList = () => {
-    setShowSnippetGroupList(true);
-    setShowStandardParagraphList(false);
-    setAddBtnDisabled(true);
+  const handleCancel = () => {
+    setShowAddEndnoteModal(false);
   };
 
-  const displayStandardParagraphList = () => {
-    setShowStandardParagraphList(true);
-    setShowSnippetGroupList(false);
-    setAddBtnDisabled(true);
-  };
+  const isEditing = !!currentEndnote;
 
   return (
-    <ScribeModal showModal={showAddEndnoteModal}>
-      <HeaderContainer>
-        <H1 data-testid="addContentModalHeader" className="noMarginHeader">
-          Endnotes
+    <ScribeModal showModal={showAddEndnoteModal} width="md">
+      <HeaderContainer data-testid="endnote-modal">
+        <H1 className="noMarginEndnote">
+          {isEditing ? 'Edit Endnote' : 'Add Endnote'}
         </H1>
-
-        <XCloseBtn handleClose={() => setShowAddEndnoteModal(false)} />
+        <XCloseBtn handleClose={handleCancel} />
       </HeaderContainer>
 
-      <Body data-testid="addContentModalBody">
-        <div className="col-sm-6">
+      <Body className="mb-4">
+        <div className="col-sm-8">
           <HrNoTopMargin />
         </div>
 
-        <StyledNote>Note: Endnotes will be added at the location of the cursor.</StyledNote>
-
-        <div className="row mt-3">
+        <div className="row m-0 mt-4">
           <div className="col-lg-12">
-            <span>
-              <DrButton
-                data-testid="addEndnoteButton"
-                styles={{
-                  button: { borderColor: 'black', marginRight: '8px' },
-                }}
-                disabled={endNoteDisabled}
-                variant="secondary"
-                size="small"
-                id="addEndnoteButton"
-                ariaLabel="Add Endnote"
-                onClick={() => displayStandardParagraphList()}>
-                <img src={AddEndnoteButton} alt="Add Endnote" title="Add Endnote" />
-              </DrButton>
-
-              <StyledLabel>New Endnote</StyledLabel>
-            </span>
-
-            <span className="ms-5">
-              <DrButton
-                data-testid="referenceExistingEndnoteButton"
-                styles={{
-                  button: { borderColor: 'black', marginRight: '8px' },
-                }}
-                variant="secondary"
-                size="small"
-                id="referenceExistingEndnoteButton"
-                ariaLabel="Reference Existing Endnote"
-                onClick={() => displaySnippetGroupList()}>
-                <DrIcon iconName="asterisk" color="black" />
-              </DrButton>
-
-              <StyledLabel>Reference Existing Endnote</StyledLabel>
-            </span>
+            {selectedWord && (
+              <>
+                <WordLabel>
+                  {isEditing ? 'Associated Word/Phrase:' : 'Selected Word/Phrase:'}
+                </WordLabel>
+                <WordDisplay>"{selectedWord}"</WordDisplay>
+              </>
+            )}
+            
+            <Label htmlFor="endnote-text">
+              Endnote Text:
+            </Label>
+            <TextArea
+              id="endnote-text"
+              value={endnoteValue}
+              onChange={(e) => setEndnoteValue(e.target.value)}
+              placeholder="Enter your endnote text here..."
+              data-testid="endnote-textarea"
+            />
           </div>
         </div>
+      </Body>
 
-        {showSnippetGroupList && (
-          <ContentContainer>
-            {snippetGroupListData.map((group) => (
-              <SnippetGroupSelector snippetGroup={group} setContentToInsert={setContentToInsert} setAddBtnDisabled={setAddBtnDisabled} />
-            ))}
-          </ContentContainer>
-        )}
-
-        {showStandardParagraphList && (
-          <ContentContainer>
-            {standardParagraphListData.map((paragraph) => (
-              <StandardParagraphSelector
-                standardParagraph={paragraph}
-                setContentToInsert={setContentToInsert}
-                setAddBtnDisabled={setAddBtnDisabled}
-                setContentIsLocked={setContentIsLocked}
-              />
-            ))}
-          </ContentContainer>
-        )}
-
-        <BtnContainer className="mb-4 mt-4">
+      <Footer>
+        <BtnContainer>
           <DrButton
             variant="primary"
-            data-testid="addButton"
-            aria-label="Add Button"
-            isDisabled={addBtnDisabled}
+            data-testid="saveEndnoteButton"
             className="btn-size"
-            onClick={insertText}>
-            Add
+            onClick={handleSubmit}
+            disabled={!endnoteValue.trim()}
+          >
+            {isEditing ? 'Update' : 'Add'}
           </DrButton>
 
-          <DrButton variant="secondary" data-testid="cancelModalButton" onClick={() => setShowAddEndnoteModal(false)} className="btn-size">
+          <DrButton
+            variant="secondary"
+            data-testid="cancelEndnoteButton"
+            onClick={handleCancel}
+            className="btn-size"
+          >
             Cancel
           </DrButton>
         </BtnContainer>
-      </Body>
+      </Footer>
     </ScribeModal>
   );
 }
@@ -235,4 +185,11 @@ export default function AddEndnoteModal({ showAddEndnoteModal, setShowAddEndnote
 AddEndnoteModal.propTypes = {
   showAddEndnoteModal: PropTypes.bool.isRequired,
   setShowAddEndnoteModal: PropTypes.func.isRequired,
+  currentEndnote: PropTypes.shape({
+    getEndnoteId: PropTypes.func,
+    getTextContent: PropTypes.func,
+    getEndnoteValue: PropTypes.func,
+    text: PropTypes.string,
+    value: PropTypes.string,
+  }),
 };
