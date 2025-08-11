@@ -54,6 +54,7 @@ export class EndnoteNode extends TextNode {
     super(text, key);
     this.__footnoteId = footnoteId;
     this.__endnoteValue = endnoteValue;
+    this.__endnoteRef = `endnote-ref-${footnoteId}`;
     
     // Register with global endnote manager
     if (footnoteId && window.endnoteManager) {
@@ -68,6 +69,15 @@ export class EndnoteNode extends TextNode {
   setEndnoteId(footnoteId) {
     const writable = this.getWritable();
     writable.__footnoteId = footnoteId;
+  }
+
+  getEndnoteRef() {
+    return this.__endnoteRef;
+  }
+
+  setEndnoteRef(endnoteRef) {
+    const writable = this.getWritable();
+    writable.__endnoteRef = endnoteRef;
   }
 
   getEndnoteValue() {
@@ -88,8 +98,8 @@ export class EndnoteNode extends TextNode {
     const element = super.createDOM(config);
     element.style.padding = '1px 2px';
     
-    // Add anchor ID for linking from endnotes at bottom of page
-    element.id = `endnote-ref-${this.__footnoteId}`;
+    // Add anchor ID using the stored endnote reference
+    element.id = this.__endnoteRef;
 
     // Add footnote number indicator
     const footnoteIndicator = document.createElement('sup');
@@ -124,6 +134,7 @@ export class EndnoteNode extends TextNode {
       ...super.exportJSON(),
       footnoteId: this.__footnoteId,
       endnoteValue: this.__endnoteValue,
+      endnoteRef: this.__endnoteRef,
       type: 'footnote',
       version: 1,
     };
