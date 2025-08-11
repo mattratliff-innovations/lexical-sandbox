@@ -9,18 +9,52 @@ import './EndnotePlugin.css';
 window.endnoteManager = window.endnoteManager || {
   counter: 1,
   endnotes: new Map(),
+  initialized: false,
+  
+  initializeFromLetter: function(letterData) {
+    this.reset();
+    if (letterData && letterData.endNotes && Array.isArray(letterData.endNotes)) {
+      let maxId = 0;
+      letterData.endNotes.forEach(endnote => {
+        const id = parseInt(endnote.index);
+        this.endnotes.set(id, { 
+          text: endnote.text || '', 
+          value: endnote.value || '' 
+        });
+        maxId = Math.max(maxId, id);
+      });
+      this.counter = maxId + 1;
+    }
+    this.initialized = true;
+    console.log('Endnote manager initialized from letter data:', this.getAllEndnotes());
+  },
+  
+  reset: function() {
+    this.counter = 1;
+    this.endnotes.clear();
+    this.initialized = false;
+    console.log('Endnote manager reset');
+  },
+  
   getNextId: function() {
     return this.counter++;
   },
+  
   addEndnote: function(id, text, value) {
     this.endnotes.set(id, { text, value });
+    // Update counter to ensure it's always higher than existing IDs
+    if (id >= this.counter) {
+      this.counter = id + 1;
+    }
   },
+  
   updateEndnote: function(id, value) {
     const endnote = this.endnotes.get(id);
     if (endnote) {
       endnote.value = value;
     }
   },
+  
   getAllEndnotes: function() {
     const result = [];
     for (const [id, data] of this.endnotes) {
@@ -32,6 +66,7 @@ window.endnoteManager = window.endnoteManager || {
     }
     return result.sort((a, b) => parseInt(a.index) - parseInt(b.index));
   },
+  
   removeEndnote: function(id) {
     this.endnotes.delete(id);
   }
