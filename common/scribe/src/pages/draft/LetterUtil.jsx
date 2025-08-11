@@ -74,15 +74,53 @@ export function getEnclosuresHtml(enclosures) {
   );
 }
 
+// Helper function to extract endnotes from HTML content
+export const extractEndnotesFromHtml = (htmlContent) => {
+  if (!htmlContent) return [];
+  
+  // Create a temporary DOM element to parse the HTML
+  const tempDiv = document.createElement('div');
+  tempDiv.innerHTML = htmlContent;
+  
+  const endnotes = [];
+  const endnoteElements = tempDiv.querySelectorAll('[data-footnote-id]');
+  
+  endnoteElements.forEach((element) => {
+    const id = element.getAttribute('data-footnote-id');
+    const value = element.getAttribute('data-endnote-value') || '';
+    const text = element.textContent || '';
+    
+    if (id && !endnotes.find(note => note.index === id)) {
+      endnotes.push({
+        index: id,
+        value: value,
+        text: text
+      });
+    }
+  });
+  
+  // Sort by index
+  return endnotes.sort((a, b) => parseInt(a.index) - parseInt(b.index));
+};
+
 export function getEndNotesHtml(endnotes) {
-  if (!Array.isArray(endnotes) || endnotes.length === 0) return '';
+  // Handle both array format and HTML extraction
+  let notesToRender = [];
+  
+  if (Array.isArray(endnotes)) {
+    notesToRender = endnotes;
+  } else if (typeof endnotes === 'string') {
+    notesToRender = extractEndnotesFromHtml(endnotes);
+  }
+  
+  if (notesToRender.length === 0) return '';
 
   return (
     <>
-    <strong>Endnotes:</strong>
-    <EndNotesContainer>
-        <p>{endnotes.map((endnote) => (
-          <li>
+      <strong>Endnotes:</strong>
+      <EndNotesContainer>
+        {notesToRender.map((endnote) => (
+          <li key={`endnote-${endnote.index}`}>
             <div id={`endnote-${endnote.index}`}>
               <span>
                 <a href={`#endnote-ref-${endnote.index}`}>[{endnote.index}]</a>
@@ -91,8 +129,7 @@ export function getEndNotesHtml(endnotes) {
             </div>
           </li>
         ))}
-        </p>
-    </EndNotesContainer>
+      </EndNotesContainer>
     </>
   );
 }
