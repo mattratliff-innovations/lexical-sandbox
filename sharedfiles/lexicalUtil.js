@@ -96,12 +96,36 @@ const addCustomHtmlStyles = (html, tableAlignments, tableWidths = [], tableColum
 };
 
 // Custom HTML transformer for EndnoteNode
-const addEndnoteAttributes = (html) => {
+const addEndnoteAttributes = (html, editor) => {
+  if (!editor) return html;
+  
+  let endnoteData = {};
+  
+  // Extract endnote data from the editor state
+  try {
+    editor.getEditorState().read(() => {
+      const root = $getRoot();
+      const traverse = (node) => {
+        if (node.getType && node.getType() === 'footnote') {
+          endnoteData[node.__footnoteId] = node.__endnoteValue || '';
+        }
+        if (node.getChildren) {
+          const children = node.getChildren();
+          children.forEach(traverse);
+        }
+      };
+      traverse(root);
+    });
+  } catch (e) {
+    console.warn('Could not extract endnote data:', e);
+  }
+  
   // This function adds proper attributes to endnote spans for extraction
-  return html.replace(/<span([^>]*class="[^"]*footnote[^"]*"[^>]*)>([^<]*)<sup>\[(\d+)\]<\/sup><\/span>/g, 
+  return html.replace(/<span([^>]*?)>([^<]*)<sup>\[(\d+)\]<\/sup><\/span>/g, 
     (match, attributes, text, id) => {
+      const endnoteValue = endnoteData[id] || '';
       // Extract existing attributes and add our custom ones
-      return `<span${attributes} data-footnote-id="${id}" data-endnote-text="${text.trim()}" data-endnote-value="">${text}<sup>[${id}]</sup></span>`;
+      return `<span${attributes} data-footnote-id="${id}" data-endnote-text="${text.trim()}" data-endnote-value="${endnoteValue}">${text}<sup>[${id}]</sup></span>`;
     }
   );
 };
@@ -122,7 +146,7 @@ export const exportLexicalHtml = (editor) => {
   html = addCustomHtmlStyles(html, tableAlignments, tableWidths, tableColumnWidths);
   
   // Add endnote attributes for proper extraction
-  html = addEndnoteAttributes(html);
+  html = addEndnoteAttributes(html, editor);
 
   return html;
 };

@@ -83,19 +83,46 @@ export const extractEndnotesFromHtml = (htmlContent) => {
   tempDiv.innerHTML = htmlContent;
   
   const endnotes = [];
-  const endnoteElements = tempDiv.querySelectorAll('[data-footnote-id]');
+  
+  // Look for spans with footnote class and extract endnote data
+  const endnoteElements = tempDiv.querySelectorAll('span');
   
   endnoteElements.forEach((element) => {
-    const id = element.getAttribute('data-footnote-id');
-    const value = element.getAttribute('data-endnote-value') || '';
-    const text = element.textContent || '';
-    
-    if (id && !endnotes.find(note => note.index === id)) {
-      endnotes.push({
-        index: id,
-        value: value,
-        text: text
-      });
+    // Check if this is an endnote element by looking for the sup element with bracket notation
+    const supElement = element.querySelector('sup');
+    if (supElement && supElement.textContent.match(/\[(\d+)\]/)) {
+      const match = supElement.textContent.match(/\[(\d+)\]/);
+      const id = match[1];
+      const text = element.childNodes[0]?.textContent || element.textContent.replace(supElement.textContent, '').trim();
+      
+      // Try to get the endnote value from data attributes or default to empty
+      let value = element.getAttribute('data-endnote-value') || '';
+      
+      // If we can't find it in attributes, check if it's stored in the global endnote data
+      if (!value && window.lexicalEditor) {
+        try {
+          window.lexicalEditor.getEditorState().read(() => {
+            const root = window.lexicalEditor.getEditorState()._nodeMap;
+            for (const [key, node] of root) {
+              if (node.__type === 'footnote' && node.__footnoteId === id) {
+                value = node.__endnoteValue || '';
+                break;
+              }
+            }
+          });
+        } catch (e) {
+          // Fallback if we can't access the editor state
+          console.warn('Could not access endnote value from editor state');
+        }
+      }
+      
+      if (id && !endnotes.find(note => note.index === id)) {
+        endnotes.push({
+          index: id,
+          value: value,
+          text: text
+        });
+      }
     }
   });
   

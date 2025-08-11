@@ -59,24 +59,45 @@ const ScribeDocument = forwardRef(
     // Helper function to extract endnotes from all editor content
     const extractAllEndnotes = () => {
       const allEndnotes = [];
-      let endnoteIdCounter = {};
+
+      // Helper function to extract endnotes from a single editor
+      const extractFromEditor = (editorRef) => {
+        if (!editorRef) return [];
+        
+        const endnotes = [];
+        try {
+          editorRef.getEditorState().read(() => {
+            const root = editorRef.getEditorState()._nodeMap || new Map();
+            for (const [key, node] of root) {
+              if (node.__type === 'footnote') {
+                endnotes.push({
+                  index: node.__footnoteId,
+                  value: node.__endnoteValue || '',
+                  text: node.__text || ''
+                });
+              }
+            }
+          });
+        } catch (e) {
+          console.warn('Could not extract endnotes from editor:', e);
+          // Fallback to HTML extraction
+          const html = exportLexicalHtml(editorRef);
+          return extractEndnotesFromHtml(html);
+        }
+        
+        return endnotes;
+      };
 
       // Extract from starts-with editor
-      const startsWithHtml = exportLexicalHtml(editorsRef.current['starts-with-editor']);
-      const startsWithEndnotes = extractEndnotesFromHtml(startsWithHtml);
-      allEndnotes.push(...startsWithEndnotes);
+      allEndnotes.push(...extractFromEditor(editorsRef.current['starts-with-editor']));
 
       // Extract from section editors
       draftState.sections.forEach((section) => {
-        const sectionHtml = exportLexicalHtml(editorsRef.current[section.frontEndId]);
-        const sectionEndnotes = extractEndnotesFromHtml(sectionHtml);
-        allEndnotes.push(...sectionEndnotes);
+        allEndnotes.push(...extractFromEditor(editorsRef.current[section.frontEndId]));
       });
 
       // Extract from ends-with editor
-      const endsWithHtml = exportLexicalHtml(editorsRef.current['ends-with-editor']);
-      const endsWithEndnotes = extractEndnotesFromHtml(endsWithHtml);
-      allEndnotes.push(...endsWithEndnotes);
+      allEndnotes.push(...extractFromEditor(editorsRef.current['ends-with-editor']));
 
       // Remove duplicates and sort by index
       const uniqueEndnotes = allEndnotes.filter((endnote, index, self) => 
