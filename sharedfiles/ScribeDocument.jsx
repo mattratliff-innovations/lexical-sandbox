@@ -61,15 +61,22 @@ const ScribeDocument = forwardRef(
       const allEndnotes = [];
 
       // Helper function to extract endnotes from a single editor
-      const extractFromEditor = (editorRef) => {
-        if (!editorRef) return [];
+      const extractFromEditor = (editorRef, editorName) => {
+        if (!editorRef) {
+          console.log(`Editor ${editorName} not found`);
+          return [];
+        }
         
         const endnotes = [];
         try {
           editorRef.getEditorState().read(() => {
             const root = editorRef.getEditorState()._nodeMap || new Map();
+            console.log(`Checking editor ${editorName}, node map size:`, root.size);
+            
             for (const [key, node] of root) {
+              console.log(`Node type: ${node.__type}, key: ${key}`);
               if (node.__type === 'footnote') {
+                console.log(`Found endnote: ID=${node.__footnoteId}, value="${node.__endnoteValue}", text="${node.__text}"`);
                 endnotes.push({
                   index: node.__footnoteId,
                   value: node.__endnoteValue || '',
@@ -79,31 +86,45 @@ const ScribeDocument = forwardRef(
             }
           });
         } catch (e) {
-          console.warn('Could not extract endnotes from editor:', e);
+          console.warn(`Could not extract endnotes from editor ${editorName}:`, e);
           // Fallback to HTML extraction
-          const html = exportLexicalHtml(editorRef);
-          return extractEndnotesFromHtml(html);
+          try {
+            const html = exportLexicalHtml(editorRef);
+            console.log(`Fallback HTML extraction for ${editorName}:`, html);
+            const htmlEndnotes = extractEndnotesFromHtml(html);
+            console.log(`Extracted from HTML:`, htmlEndnotes);
+            return htmlEndnotes;
+          } catch (htmlError) {
+            console.warn(`HTML extraction also failed for ${editorName}:`, htmlError);
+          }
         }
         
         return endnotes;
       };
 
       // Extract from starts-with editor
-      allEndnotes.push(...extractFromEditor(editorsRef.current['starts-with-editor']));
+      console.log('Extracting from starts-with editor...');
+      allEndnotes.push(...extractFromEditor(editorsRef.current['starts-with-editor'], 'starts-with-editor'));
 
       // Extract from section editors
+      console.log('Extracting from section editors...');
       draftState.sections.forEach((section) => {
-        allEndnotes.push(...extractFromEditor(editorsRef.current[section.frontEndId]));
+        console.log(`Checking section ${section.frontEndId}`);
+        allEndnotes.push(...extractFromEditor(editorsRef.current[section.frontEndId], section.frontEndId));
       });
 
       // Extract from ends-with editor
-      allEndnotes.push(...extractFromEditor(editorsRef.current['ends-with-editor']));
+      console.log('Extracting from ends-with editor...');
+      allEndnotes.push(...extractFromEditor(editorsRef.current['ends-with-editor'], 'ends-with-editor'));
+
+      console.log('All extracted endnotes before dedup:', allEndnotes);
 
       // Remove duplicates and sort by index
       const uniqueEndnotes = allEndnotes.filter((endnote, index, self) => 
         index === self.findIndex(e => e.index === endnote.index)
       );
 
+      console.log('Final unique endnotes:', uniqueEndnotes);
       return uniqueEndnotes.sort((a, b) => parseInt(a.index) - parseInt(b.index));
     };
 
@@ -287,12 +308,6 @@ const ScribeDocument = forwardRef(
       setOrganizationSignature(findOrganizationSignature(draft));
     }, [draft]);
 
-    // Extract and display endnotes dynamically
-    const displayEndnotes = () => {
-      const allEndnotes = extractAllEndnotes();
-      return getEndNotesHtml(allEndnotes);
-    };
-
     return (
       <DataContext.Provider value={contextValue}>
         <div className="portraitUsLetter" ref={portraitUsLetterRef} data-testid="portraitUsLetter">
@@ -359,7 +374,12 @@ const ScribeDocument = forwardRef(
 
             {getEnclosuresHtml(draft?.enclosures)}
             
-            {displayEndnotes()}
+            <div data-testid="endnotes-section">
+              {(() => {
+                const allEndnotes = extractAllEndnotes();
+                return getEndNotesHtml(allEndnotes);
+              })()}
+            </div>
           </div>
 
           <div className="bottomMarginPlaceholder" data-testid="bottomMarginPlaceholder" style={{ height: `${draftState.marginBottom}px` }} />

@@ -76,7 +76,12 @@ export function getEnclosuresHtml(enclosures) {
 
 // Helper function to extract endnotes from HTML content
 export const extractEndnotesFromHtml = (htmlContent) => {
-  if (!htmlContent) return [];
+  if (!htmlContent) {
+    console.log('No HTML content provided to extractEndnotesFromHtml');
+    return [];
+  }
+  
+  console.log('Extracting endnotes from HTML:', htmlContent);
   
   // Create a temporary DOM element to parse the HTML
   const tempDiv = document.createElement('div');
@@ -85,9 +90,12 @@ export const extractEndnotesFromHtml = (htmlContent) => {
   const endnotes = [];
   
   // Look for spans with footnote class and extract endnote data
-  const endnoteElements = tempDiv.querySelectorAll('span');
+  const allSpans = tempDiv.querySelectorAll('span');
+  console.log(`Found ${allSpans.length} span elements`);
   
-  endnoteElements.forEach((element) => {
+  allSpans.forEach((element, idx) => {
+    console.log(`Span ${idx}:`, element.outerHTML);
+    
     // Check if this is an endnote element by looking for the sup element with bracket notation
     const supElement = element.querySelector('sup');
     if (supElement && supElement.textContent.match(/\[(\d+)\]/)) {
@@ -95,8 +103,11 @@ export const extractEndnotesFromHtml = (htmlContent) => {
       const id = match[1];
       const text = element.childNodes[0]?.textContent || element.textContent.replace(supElement.textContent, '').trim();
       
+      console.log(`Found endnote: ID=${id}, text="${text}"`);
+      
       // Try to get the endnote value from data attributes or default to empty
       let value = element.getAttribute('data-endnote-value') || '';
+      console.log(`Endnote value from data attribute: "${value}"`);
       
       // If we can't find it in attributes, check if it's stored in the global endnote data
       if (!value && window.lexicalEditor) {
@@ -106,25 +117,32 @@ export const extractEndnotesFromHtml = (htmlContent) => {
             for (const [key, node] of root) {
               if (node.__type === 'footnote' && node.__footnoteId === id) {
                 value = node.__endnoteValue || '';
+                console.log(`Found endnote value from global editor: "${value}"`);
                 break;
               }
             }
           });
         } catch (e) {
           // Fallback if we can't access the editor state
-          console.warn('Could not access endnote value from editor state');
+          console.warn('Could not access endnote value from editor state:', e);
         }
       }
       
       if (id && !endnotes.find(note => note.index === id)) {
-        endnotes.push({
+        const endnote = {
           index: id,
           value: value,
           text: text
-        });
+        };
+        console.log('Adding endnote:', endnote);
+        endnotes.push(endnote);
       }
+    } else {
+      console.log(`Span ${idx} is not an endnote`);
     }
   });
+  
+  console.log('Final extracted endnotes:', endnotes);
   
   // Sort by index
   return endnotes.sort((a, b) => parseInt(a.index) - parseInt(b.index));
