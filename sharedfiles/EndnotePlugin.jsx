@@ -19,7 +19,8 @@ window.endnoteManager = window.endnoteManager || {
         const id = parseInt(endnote.index);
         this.endnotes.set(id, { 
           text: endnote.text || '', 
-          value: endnote.value || '' 
+          value: endnote.value || '',
+          ref: endnote.ref || `endnote-ref-${id}`
         });
         maxId = Math.max(maxId, id);
       });
@@ -40,8 +41,12 @@ window.endnoteManager = window.endnoteManager || {
     return this.counter++;
   },
   
-  addEndnote: function(id, text, value) {
-    this.endnotes.set(id, { text, value });
+  addEndnote: function(id, text, value, ref) {
+    this.endnotes.set(id, { 
+      text, 
+      value, 
+      ref: ref || `endnote-ref-${id}` 
+    });
     // Update counter to ensure it's always higher than existing IDs
     if (id >= this.counter) {
       this.counter = id + 1;
@@ -61,7 +66,8 @@ window.endnoteManager = window.endnoteManager || {
       result.push({
         index: id,
         text: data.text,
-        value: data.value
+        value: data.value,
+        ref: data.ref
       });
     }
     return result.sort((a, b) => parseInt(a.index) - parseInt(b.index));
@@ -93,7 +99,7 @@ export class EndnoteNode extends TextNode {
     
     // Register with global endnote manager
     if (footnoteId && window.endnoteManager) {
-      window.endnoteManager.addEndnote(footnoteId, text, endnoteValue);
+      window.endnoteManager.addEndnote(footnoteId, text, endnoteValue, this.__endnoteRef);
     }
   }
 
@@ -160,8 +166,12 @@ export class EndnoteNode extends TextNode {
   }
 
   static importJSON(serializedNode) {
-    const { text, footnoteId, endnoteValue } = serializedNode;
-    return $createEndnoteNode(text, footnoteId, endnoteValue);
+    const { text, footnoteId, endnoteValue, endnoteRef } = serializedNode;
+    const node = $createEndnoteNode(text, footnoteId, endnoteValue);
+    if (endnoteRef) {
+      node.__endnoteRef = endnoteRef;
+    }
+    return node;
   }
 
   exportJSON() {

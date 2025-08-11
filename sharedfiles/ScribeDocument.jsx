@@ -84,11 +84,12 @@ const ScribeDocument = forwardRef(
             for (const [key, node] of root) {
               console.log(`Node type: ${node.__type}, key: ${key}`);
               if (node.__type === 'footnote') {
-                console.log(`Found endnote: ID=${node.__footnoteId}, value="${node.__endnoteValue}", text="${node.__text}"`);
+                console.log(`Found endnote: ID=${node.__footnoteId}, value="${node.__endnoteValue}", text="${node.__text}", ref="${node.__endnoteRef}"`);
                 endnotes.push({
                   index: node.__footnoteId,
                   value: node.__endnoteValue || '',
-                  text: node.__text || ''
+                  text: node.__text || '',
+                  ref: node.__endnoteRef || `endnote-ref-${node.__footnoteId}`
                 });
               }
             }
