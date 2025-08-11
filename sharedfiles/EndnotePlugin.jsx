@@ -5,6 +5,38 @@ import { useEffect } from 'react';
 import { mergeRegister } from '@lexical/utils';
 import './EndnotePlugin.css';
 
+// Global endnote management
+window.endnoteManager = window.endnoteManager || {
+  counter: 1,
+  endnotes: new Map(),
+  getNextId: function() {
+    return this.counter++;
+  },
+  addEndnote: function(id, text, value) {
+    this.endnotes.set(id, { text, value });
+  },
+  updateEndnote: function(id, value) {
+    const endnote = this.endnotes.get(id);
+    if (endnote) {
+      endnote.value = value;
+    }
+  },
+  getAllEndnotes: function() {
+    const result = [];
+    for (const [id, data] of this.endnotes) {
+      result.push({
+        index: id,
+        text: data.text,
+        value: data.value
+      });
+    }
+    return result.sort((a, b) => parseInt(a.index) - parseInt(b.index));
+  },
+  removeEndnote: function(id) {
+    this.endnotes.delete(id);
+  }
+};
+
 // Custom command for footnote
 export const INSERT_FOOTNOTE_COMMAND = 'INSERT_FOOTNOTE_COMMAND';
 
@@ -22,6 +54,11 @@ export class EndnoteNode extends TextNode {
     super(text, key);
     this.__footnoteId = footnoteId;
     this.__endnoteValue = endnoteValue;
+    
+    // Register with global endnote manager
+    if (footnoteId && window.endnoteManager) {
+      window.endnoteManager.addEndnote(footnoteId, text, endnoteValue);
+    }
   }
 
   getEndnoteId() {
@@ -40,11 +77,15 @@ export class EndnoteNode extends TextNode {
   setEndnoteValue(endnoteValue) {
     const writable = this.getWritable();
     writable.__endnoteValue = endnoteValue;
+    
+    // Update global endnote manager
+    if (window.endnoteManager) {
+      window.endnoteManager.updateEndnote(this.__footnoteId, endnoteValue);
+    }
   }
 
   createDOM(config) {
     const element = super.createDOM(config);
-    element.style.backgroundColor = '#ffeb3b';
     element.style.padding = '1px 2px';
 
     // Add footnote number indicator
@@ -213,8 +254,6 @@ export function useEndnotePlugin(handleSetSelectedText, handleSetCanCreateEndnot
     // Store editor reference globally
     window.lexicalEditor = editor;
 
-    let footnoteCounter = 1;
-
     const insertEndnote = (endnoteValue = '') => {
       editor.update(() => {
         const selection = $getSelection();
@@ -224,6 +263,9 @@ export function useEndnotePlugin(handleSetSelectedText, handleSetCanCreateEndnot
         }
 
         const selectedText = selection.getTextContent();
+
+        // Get next global endnote ID
+        const footnoteId = window.endnoteManager ? window.endnoteManager.getNextId() : 1;
 
         if (selectedText.trim() === '') {
           // If no text is selected, try to select the word at cursor
@@ -260,7 +302,7 @@ export function useEndnotePlugin(handleSetSelectedText, handleSetCanCreateEndnot
                 nodes.push($createTextNode(beforeText));
               }
 
-              nodes.push($createEndnoteNode(wordText, footnoteCounter++, endnoteValue));
+              nodes.push($createEndnoteNode(wordText, footnoteId, endnoteValue));
 
               if (afterText) {
                 nodes.push($createTextNode(afterText));
@@ -276,7 +318,7 @@ export function useEndnotePlugin(handleSetSelectedText, handleSetCanCreateEndnot
           }
         } else {
           // Replace selected text with footnote node
-          const footnoteNode = $createEndnoteNode(selectedText, footnoteCounter++, endnoteValue);
+          const footnoteNode = $createEndnoteNode(selectedText, footnoteId, endnoteValue);
           selection.insertNodes([footnoteNode]);
         }
       });

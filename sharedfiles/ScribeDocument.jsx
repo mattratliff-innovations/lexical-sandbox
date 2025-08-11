@@ -58,6 +58,14 @@ const ScribeDocument = forwardRef(
 
     // Helper function to extract endnotes from all editor content
     const extractAllEndnotes = () => {
+      // Use global endnote manager if available
+      if (window.endnoteManager) {
+        const globalEndnotes = window.endnoteManager.getAllEndnotes();
+        console.log('Using global endnote manager, found:', globalEndnotes);
+        return globalEndnotes;
+      }
+
+      console.log('Global endnote manager not available, falling back to editor extraction');
       const allEndnotes = [];
 
       // Helper function to extract endnotes from a single editor
@@ -139,8 +147,8 @@ const ScribeDocument = forwardRef(
 
       const enclosuresHtml = renderToStaticMarkup(getEnclosuresHtml(draftState?.enclosures || []));
 
-      // Extract all endnotes from the content
-      const allEndnotes = extractAllEndnotes();
+      // Extract all endnotes from the content - use global manager if available
+      const allEndnotes = window.endnoteManager ? window.endnoteManager.getAllEndnotes() : extractAllEndnotes();
       const endNotesHtml = renderToStaticMarkup(getEndNotesHtml(allEndnotes));
 
       return `${hydratedLetterHeader}
@@ -167,8 +175,8 @@ const ScribeDocument = forwardRef(
         };
       });
 
-      // Extract endnotes for storage
-      const allEndnotes = extractAllEndnotes();
+      // Extract endnotes for storage - use global manager if available
+      const allEndnotes = window.endnoteManager ? window.endnoteManager.getAllEndnotes() : extractAllEndnotes();
 
       const draftData = {
         sectionsAttributes: formattedSections,
