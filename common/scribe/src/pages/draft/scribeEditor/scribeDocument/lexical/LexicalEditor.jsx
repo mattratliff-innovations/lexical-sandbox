@@ -327,10 +327,7 @@ export default function LexicalEditor({
             {false && <TreeViewPlugin />}
 
             <ListPlugin />
-            <EndnotePluginWrapper 
-              handleSetSelectedText={handleSetSelectedText} 
-              handleSetCanCreateEndnote={handleSetCanCreateEndnote}
-            />
+            <EndnotePluginWrapper handleSetSelectedText={handleSetSelectedText} handleSetCanCreateEndnote={handleSetCanCreateEndnote} />
           </TextEditorArea>
         </EditorContainer>
 

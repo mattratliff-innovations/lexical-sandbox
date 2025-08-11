@@ -16,7 +16,7 @@ import VariablePlugin, { showVariableValues, hydrateVariablesHeadlessly } from '
 import { exportLexicalHtml } from './lexical/lexicalUtil';
 import './ScribeDocument.css';
 import SnippetPlugin from './lexical/letterEditor/plugins/SnippetPlugin';
-import { getEnclosuresHtml } from '../../LetterUtil';
+import { getEnclosuresHtml, getEndNotesHtml } from '../../LetterUtil';
 
 const EditorSection = styled.div``;
 
@@ -67,12 +67,16 @@ const ScribeDocument = forwardRef(
 
       const enclosuresHtml = renderToStaticMarkup(getEnclosuresHtml(draftState?.enclosures || []));
 
+      const endNotesHtml = renderToStaticMarkup(getEndNotesHtml(draftState?.endNotes || []));
+
+      
       return `${hydratedLetterHeader}
         <div data-testid="startsWithHtml">${startsWithHtml}</div>
         <div data-testid="sectionsHtml">${sectionsHtml}</div>
         <div data-testid="endsWithHtml">${endsWithHtml}</div>
         <div data-testid="signature">${signature}</div>
-        <div data-testid="enclosure">${enclosuresHtml}</div>`;
+        <div data-testid="enclosure">${enclosuresHtml}</div>
+        <div data-testid="enclosure">${endNotesHtml}</div>`;
     };
 
     const letterDraftData = () => {
@@ -291,6 +295,8 @@ const ScribeDocument = forwardRef(
             )}
 
             {getEnclosuresHtml(draft?.enclosures)}
+            
+            {getEndNotesHtml(draftState.endNotes)}
           </div>
 
           <div className="bottomMarginPlaceholder" data-testid="bottomMarginPlaceholder" style={{ height: `${draftState.marginBottom}px` }} />

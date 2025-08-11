@@ -16,41 +16,101 @@ import './lexicalTable.css';
 import AlienNumberNode from './letterEditor/nodes/AlienNumberNode';
 import { EndnoteNode } from './EndnotePlugin';
 
-const exportLexicalHtml = (editor) => {
+const getTableAlignments = (editor) => {
+  const alignments = [];
+  editor.getEditorState().read(() => {
+    const root = $getRoot();
+    root.getChildren().forEach((child) => {
+      if (child.getType() === 'table' && child.__alignment) alignments.push(child.__alignment);
+    });
+  });
+  return alignments;
+};
+
+const getTableWidths = (editor) => {
+  const widths = [];
+
+  editor.getEditorState().read(() => {
+    const root = $getRoot();
+    root.getChildren().forEach((child) => {
+      if (child.getType() === 'table') {
+        if (child.__width) widths.push(child.__width);
+        else widths.push(null);
+      }
+    });
+  });
+  return widths;
+};
+
+const getTableColumnWidths = (editor) => {
+  const columnWidths = [];
+
+  editor.getEditorState().read(() => {
+    const root = $getRoot();
+
+    root.getChildren().forEach((child) => {
+      if (child.getType() === 'table') {
+        if (child.__columnWidths) columnWidths.push(child.__columnWidths);
+      }
+    });
+  });
+  return columnWidths;
+};
+
+const addCustomHtmlStyles = (html, tableAlignments, tableWidths = [], tableColumnWidths = []) => {
+  if (tableAlignments.length === 0 && tableWidths.length === 0) return html;
+
+  let tableIndex = 0;
+  let columnWidthIndex = 0;
+
+  return html.replace(/<table([^>]*)>/g, (match, attributes) => {
+    let styleContent = '';
+    let dataAttributes = '';
+    let hasChanges = false;
+
+    if (tableIndex < tableAlignments.length) {
+      styleContent += `justify-self: ${tableAlignments[tableIndex]};`;
+      hasChanges = true;
+    }
+
+    if (tableIndex < tableWidths.length && tableWidths[tableIndex]) {
+      styleContent += ` width: ${tableWidths[tableIndex]}%;`;
+      hasChanges = true;
+    }
+
+    if (columnWidthIndex < tableColumnWidths.length) {
+      dataAttributes += ` data-column-widths="${tableColumnWidths[columnWidthIndex].join(',')}"`;
+      columnWidthIndex++;
+      hasChanges = true;
+    }
+
+    if (hasChanges) {
+      const newAttributes = `${attributes} style="${styleContent}" ${dataAttributes}`;
+      tableIndex++;
+      return `<table${newAttributes}>`;
+    }
+
+    tableIndex++;
+    return match;
+  });
+};
+
+export const exportLexicalHtml = (editor) => {
   if (editor === undefined) return '';
   let html = '';
 
-  const state = editor.getEditorState();
-
-  state.read(() => {
+  editor.getEditorState().read(() => {
     html = $generateHtmlFromNodes(editor, null);
-
-    // checks to see if any tables have been aligned and returns sterilized html.
-    const tableAlignments = [];
-    const root = $getRoot();
-    root.getChildren().forEach((child) => {
-      if (child.getType() === 'table' && child.__alignment) {
-        tableAlignments.push(child.__alignment);
-      }
-    });
-
-    if (tableAlignments.length > 0) {
-      let tableIndex = 0;
-      html = html.replace(/<table([^>]*)>/g, (match, attributes) => {
-        if (tableIndex < tableAlignments.length) {
-          const alignment = tableAlignments[tableIndex];
-          const newAttributes = `${attributes} data-align="${alignment}" style="justify-self: ${alignment};"`;
-          tableIndex++;
-          return `<table${newAttributes}>`;
-        }
-        return match;
-      });
-    }
   });
-  return html;
+
+  const tableAlignments = getTableAlignments(editor);
+  const tableWidths = getTableWidths(editor);
+  const tableColumnWidths = getTableColumnWidths(editor);
+
+  return addCustomHtmlStyles(html, tableAlignments, tableWidths, tableColumnWidths);
 };
 
-const importLexicalHtml = (editor, value) => {
+export const importLexicalHtml = (editor, value) => {
   editor.update(
     () => {
       const root = $getRoot();
@@ -115,7 +175,7 @@ const LexicalTheme = {
   },
 };
 
-const editorConfig = {
+export const editorConfig = {
   namespace: 'Scribe',
   nodes: [
     ListItemNode,
@@ -143,5 +203,3 @@ const editorConfig = {
   },
   theme: LexicalTheme,
 };
-
-export { exportLexicalHtml, importLexicalHtml, editorConfig };

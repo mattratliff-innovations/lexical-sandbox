@@ -1,11 +1,19 @@
 import React from 'react';
 import PropTypes from 'prop-types';
+import styled from '@emotion/styled';
 
 export const SPELLING_ERROR_CLASS = 'spelling-error';
 export const GRAMMAR_ERROR_CLASS = 'grammar-error';
 export const LINGUISTIC_ERROR_CLASS = 'linguistic-error';
 export const LETTER_CLOSING = 'Sincerely,';
 const SIGNATURE_CLASS = 'dhs-signature-preview-image';
+
+const EndNotesContainer = styled.ul`
+    list-style-type: none;
+    padding: 0;
+    margin: 0;
+    margin-left:8px;
+`;
 
 export const convertInchesToPixels = (inches) => inches / 0.01041666666; // Google said this is the number of inches in a pixel.
 
@@ -53,7 +61,7 @@ export function getEnclosuresHtml(enclosures) {
   if (!Array.isArray(enclosures) || enclosures.length === 0) return '';
 
   return (
-    <div className="enclosure-container">
+    <div>
       <p>
         <strong>Enclosures:</strong>
       </p>
@@ -63,6 +71,29 @@ export function getEnclosuresHtml(enclosures) {
         ))}
       </ul>
     </div>
+  );
+}
+
+export function getEndNotesHtml(endnotes) {
+  if (!Array.isArray(endnotes) || endnotes.length === 0) return '';
+
+  return (
+    <>
+    <strong>Endnotes:</strong>
+    <EndNotesContainer>
+        <p>{endnotes.map((endnote) => (
+          <li>
+            <div id={`endnote-${endnote.index}`}>
+              <span>
+                <a href={`#endnote-ref-${endnote.index}`}>[{endnote.index}]</a>
+              </span>&nbsp;
+              <span>{endnote.value}</span>
+            </div>
+          </li>
+        ))}
+        </p>
+    </EndNotesContainer>
+    </>
   );
 }
 

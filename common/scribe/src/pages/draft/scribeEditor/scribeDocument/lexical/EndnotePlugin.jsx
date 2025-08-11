@@ -3,7 +3,6 @@ import { $createTextNode, $getSelection, $isRangeSelection, $isTextNode, TextNod
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
 import { useEffect } from 'react';
 import { mergeRegister } from '@lexical/utils';
-// import './FootNotePlugin.css'; // Assuming you have styles for footnotes
 import './EndnotePlugin.css';
 
 // Custom command for footnote
@@ -97,7 +96,7 @@ function $isOnWord(selection) {
   }
 
   const selectedText = selection.getTextContent();
-  
+
   // If there's selected text, return true
   if (selectedText.trim() !== '') {
     return true;
@@ -150,7 +149,8 @@ export function useEndnotePlugin(handleSetSelectedText, handleSetCanCreateEndnot
         if ($isRangeSelection(selection)) {
           const selectedText = selection.getTextContent();
           const canCreateEndnote = $isOnWord(selection);
-          
+          console.log(canCreateEndnote);
+
           handleSetSelectedText(selectedText);
           handleSetCanCreateEndnote(canCreateEndnote);
         } else {
