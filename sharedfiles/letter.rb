@@ -101,7 +101,7 @@ class Letter < ApplicationRecord
                       contacts: { methods: [:type, :errors], include: { address: { methods: [:errors] } } } },
                     { organization: { include: [:headers, { organization_signatures: { methods: [:signature_image_url, :encoded_signature] } },
                       { organization_address_xrefs: { include: :address } }] } },
-                    :letter_category]).merge(options).merge(errors: errors.messages)
+                    :letter_category]).merge(options).merge(errors: errors.messages, endNotes: end_notes || [])
   end
 
   def has_primary?
