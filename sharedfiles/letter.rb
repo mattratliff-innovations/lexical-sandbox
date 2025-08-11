@@ -45,6 +45,8 @@ class Letter < ApplicationRecord
   validates :created_by, presence: true
   validates :vawa, inclusion: { in: [true, false] }
 
+  # JSONB column - no serialization needed, Rails handles it automatically
+
   # Each scope here is used on the LetterSearch page
   scope :receipt_number_search, ->(param) { where("registrations.receipt_number LIKE ?", "#{param}%") if param.present? }
   scope :status_id_search, ->(param) { where(status_id: param) if param.present? }
@@ -56,10 +58,17 @@ class Letter < ApplicationRecord
   DRAFT_PARAMS = [
     :created_by, :letter_type_id, :registration_id, :deleted, :organization_id, :days_forward, :letter_type,
     :letter_date_override, :return_address_override, :header_id, :manual_creation, :vawa,
-    { enclosure_ids: [], letter_type_attributes: LetterType::LETTER_TYPE_PARAMS, representative_type_attributes: Contact::CONTACT_PARAMS,
-      petitioner_type_attributes: Contact::CONTACT_PARAMS, organization_attributes: Organization::ORGANIZATION_PARAMS,
-      registration_attributes: Registration::REGISTRATION_PARAMS, applicant_types_attributes: [Contact::CONTACT_PARAMS],
-      contacts_attributes: [Contact::CONTACT_PARAMS] }
+    {
+      end_notes: [],
+      enclosure_ids: [], 
+      letter_type_attributes: LetterType::LETTER_TYPE_PARAMS, 
+      representative_type_attributes: Contact::CONTACT_PARAMS,
+      petitioner_type_attributes: Contact::CONTACT_PARAMS, 
+      organization_attributes: Organization::ORGANIZATION_PARAMS,
+      registration_attributes: Registration::REGISTRATION_PARAMS, 
+      applicant_types_attributes: [Contact::CONTACT_PARAMS],
+      contacts_attributes: [Contact::CONTACT_PARAMS]
+    }
   ].freeze
 
   SUPPORTED_VARIABLES = ["[[[RECEIPT_NUMBER]]]", "[[[RECIPIENT_ADDRESS]]]", "[[[A_NUMBER_BARCODE]]]", "[[[RECEIPT_NUMBER_BARCODE]]]",

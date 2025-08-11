@@ -109,8 +109,9 @@ class Api::Scribe::V1::LettersController < ApplicationController
     params.expect(letter: [
                     :starts_with, :ends_with, :organization_signature_id,
       :letter_date_override, :letter_type_id, :return_address_override, :row1_col1, :row1_col2,
-      :row2_col1, :row2_col2, :row3_col1, :row3_col2, :end_notes, :header_id,
+      :row2_col1, :row2_col2, :row3_col1, :row3_col2, :header_id,
       {
+        end_notes: [],
         enclosure_ids: [],
         sections_attributes: [[:id, :order, :text, :_destroy]],
         enclosures_attributes: [[:id, :_destroy]]
