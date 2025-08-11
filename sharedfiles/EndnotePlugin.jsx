@@ -87,6 +87,9 @@ export class EndnoteNode extends TextNode {
   createDOM(config) {
     const element = super.createDOM(config);
     element.style.padding = '1px 2px';
+    
+    // Add anchor ID for linking from endnotes at bottom of page
+    element.id = `endnote-ref-${this.__footnoteId}`;
 
     // Add footnote number indicator
     const footnoteIndicator = document.createElement('sup');
