@@ -161,18 +161,3 @@
   font-weight: bold;
   z-index: 10;
 }
-
-.lexical-editor-input sup {
-  pointer-events: none; /* Prevent sup elements from interfering with click detection */
-}
-
-.lexical-editor-input span[data-endnote-id] {
-  cursor: pointer;
-  background-color: rgba(25, 118, 210, 0.1);
-  border-radius: 2px;
-  padding: 1px 2px;
-}
-
-.lexical-editor-input span[data-endnote-id]:hover {
-  background-color: rgba(25, 118, 210, 0.2);
-}

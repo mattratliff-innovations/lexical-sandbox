@@ -125,7 +125,6 @@ export default function LexicalEditor({
 
   const [editorReady, setEditorReady] = useState(false);
   const editorRef = useRef(null);
-  const [preventToolbarClose, setPreventToolbarClose] = useState(false);
 
   // Refs
   const containerRef = useRef(null);
@@ -139,21 +138,9 @@ export default function LexicalEditor({
     setCanCreateEndnote(canCreate);
   }, []);
 
-const handleSetCurrentEndnote = useCallback((endnoteNode) => {
-  console.log('LexicalEditor - handleSetCurrentEndnote called:', !!endnoteNode);
-  
-  if (endnoteNode) {
-    // Prevent toolbar from closing when we detect an endnote
-    console.log('LexicalEditor - Preventing toolbar close for endnote detection');
-    setPreventToolbarClose(true);
-    setTimeout(() => {
-      setPreventToolbarClose(false);
-      console.log('LexicalEditor - Re-enabling toolbar close prevention');
-    }, 1000);
-  }
-  
-  setCurrentEndnote(endnoteNode);
-}, []);
+  const handleSetCurrentEndnote = useCallback((endnoteNode) => {
+    setCurrentEndnote(endnoteNode);
+  }, []);
 
   // Add event listener for endnote click events
   useEffect(() => {
@@ -174,37 +161,22 @@ const handleSetCurrentEndnote = useCallback((endnoteNode) => {
   }, []);
 
   // Memoized handlers
-const isTargetInsideOfEditor = useCallback(
-  (target) => {
-    if (!containerRef.current || !target) return false;
+  const isTargetInsideOfEditor = useCallback(
+    (target) => {
+      if (!containerRef.current) return false;
 
-    const lexicalParentId = containerRef.current.getAttribute('id');
-    
-    // Check various ways the target could be inside the editor
-    const isInsideContainer = containerRef.current.contains(target);
-    const isInsideContentEditable = target.closest(`[${PARENT_LEXICAL_ID_ATTRIBUTE}="${CONTENT_EDITABLE_PREFIX + lexicalParentId}"]`);
-    const isInsideModal = showAddEndnoteModal || showAddContentModal || alignMenuAnchor || tableCreatorAnchor;
-    
-    // Check if target is within any lexical editor elements
-    const isInsideLexicalContent = target.closest('.lexical-editor-input') || 
-                                  target.closest('.lexical-editor-inner') ||
-                                  target.closest('.lexical-editor-container') ||
-                                  target.closest('.toolbar-item') ||
-                                  target.closest('[data-lexical-editor]');
-
-    // Check if the target has text content that might be an endnote
-    const hasEndnotePattern = target.textContent && /\[(\d+)\]/.test(target.textContent);
-
-    const result = isInsideContainer || isInsideContentEditable || isInsideModal || isInsideLexicalContent || hasEndnotePattern;
-    
-    if (hasEndnotePattern) {
-      console.log('LexicalEditor - Found endnote pattern, preventing toolbar close');
-    }
-    
-    return result;
-  },
-  [showAddEndnoteModal, showAddContentModal, alignMenuAnchor, tableCreatorAnchor]
-);
+      const lexicalParentId = containerRef.current.getAttribute('id');
+      return (
+        containerRef.current.contains(target) ||
+        target?.closest(`[${PARENT_LEXICAL_ID_ATTRIBUTE}="${CONTENT_EDITABLE_PREFIX + lexicalParentId}"]`) ||
+        showAddEndnoteModal ||
+        showAddContentModal ||
+        alignMenuAnchor ||
+        tableCreatorAnchor
+      );
+    },
+    [showAddEndnoteModal, showAddContentModal, alignMenuAnchor, tableCreatorAnchor]
+  );
 
   const toggleToolbarFocus = useCallback(() => {
     if (isEditorActive) {
@@ -271,53 +243,17 @@ const isTargetInsideOfEditor = useCallback(
   // Effects
   useEffect(() => showVariableValues(), []);
 
-useEffect(() => {
-  const handleFocusOutside = (event) => {
-    // Don't close toolbar if we're preventing it
-    if (preventToolbarClose) {
-      console.log('LexicalEditor - Toolbar close prevented by flag');
-      return;
-    }
-
-    const eventTarget = event.type === 'mousedown' ? event.target : event.relatedTarget;
-    
-    if (!isTargetInsideOfEditor(eventTarget)) {
-      console.log('LexicalEditor - Click outside editor detected, closing toolbar');
-      setIsToolbarActive(false);
-      setIsEditorActive(false);
-    } else {
-      console.log('LexicalEditor - Click inside editor, keeping toolbar open');
-    }
-  };
-
-  // Only listen for mousedown to avoid focus conflicts
-  document.addEventListener('mousedown', handleFocusOutside);
-  return () => document.removeEventListener('mousedown', handleFocusOutside);
-}, [isTargetInsideOfEditor, preventToolbarClose]);
-
-useEffect(() => {
-  const handleContainerClick = (event) => {
-    // If clicking within the editor container, ensure toolbar stays open
-    if (containerRef.current && containerRef.current.contains(event.target)) {
-      console.log('LexicalEditor - Click within container, ensuring editor is active');
-      setIsEditorActive(true);
-      
-      // Don't let the toolbar close for a short time after clicking
-      setPreventToolbarClose(true);
-      setTimeout(() => setPreventToolbarClose(false), 500);
-    }
-  };
-
-  if (containerRef.current) {
-    containerRef.current.addEventListener('click', handleContainerClick);
-    return () => {
-      if (containerRef.current) {
-        containerRef.current.removeEventListener('click', handleContainerClick);
+  useEffect(() => {
+    const handleFocusOutside = (event) => {
+      if (!isTargetInsideOfEditor(event.type === 'mousedown' ? event.target : event.relatedTarget)) {
+        setIsToolbarActive(false);
+        setIsEditorActive(false);
       }
     };
-  }
-}, []);
 
+    document.addEventListener('mousedown', handleFocusOutside);
+    return () => document.removeEventListener('mousedown', handleFocusOutside);
+  }, [isTargetInsideOfEditor]);
 
   // This useEffect is for proper focusing on a button as we move sections up and down
   useEffect(() => {
@@ -335,14 +271,13 @@ useEffect(() => {
   const handleUndo = useCallback((undo) => setCanUndo(undo), []);
   const handleRedo = useCallback((redo) => setCanRedo(redo), []);
 
-const blurCheck = useCallback(
-  (ev) => {
-    if (preventToolbarClose) return;
-    if (isTargetInsideOfEditor(ev.type === 'mousedown' ? ev.target : ev.relatedTarget)) return;
-    showVariableValues();
-  },
-  [showVariableValues, isTargetInsideOfEditor, preventToolbarClose]
-);
+  const blurCheck = useCallback(
+    (ev) => {
+      if (isTargetInsideOfEditor(ev.type === 'mousedown' ? ev.target : ev.relatedTarget)) return;
+      showVariableValues();
+    },
+    [showVariableValues, isTargetInsideOfEditor]
+  );
 
   return (
     <div onFocus={() => showWings(id)} onMouseDown={() => showWings(id)}>
@@ -355,24 +290,15 @@ const blurCheck = useCallback(
           </LeftWing>
         )}
 
-<EditorContainer
-  className="lexical-editor-container"
-  id={id}
-  onFocus={() => {
-    console.log('LexicalEditor - Editor container focused');
-    setIsEditorActive(true);
-  }}
-  onMouseDown={(e) => {
-    console.log('LexicalEditor - Editor container mouse down');
-    setIsEditorActive(true);
-    // Prevent toolbar from closing immediately
-    setPreventToolbarClose(true);
-    setTimeout(() => setPreventToolbarClose(false), 300);
-  }}
-  onKeyDown={handleKeyDown}
-  toolbarOpen={isToolbarActive}
-  onBlur={blurCheck}
-  ref={containerRef}>
+        <EditorContainer
+          className="lexical-editor-container"
+          id={id}
+          onFocus={() => setIsEditorActive(true)}
+          onMouseDown={() => setIsEditorActive(true)}
+          onKeyDown={handleKeyDown}
+          toolbarOpen={isToolbarActive}
+          onBlur={blurCheck}
+          ref={containerRef}>
           {editorRefAssignmentFunction && <EditorRefPlugin editorRef={editorRefAssignmentFunction} />}
 
           {type.includes('4admin') || (editable && isToolbarActive) ? (

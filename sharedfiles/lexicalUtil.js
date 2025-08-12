@@ -104,50 +104,6 @@ const addEndnoteAttributes = (html) => {
   });
 };
 
-const preserveEndnoteData = (html, editor) => {
-  if (!editor) return html;
-  
-  // Get endnote data from the editor state
-  let endnoteData = {};
-  
-  try {
-    editor.getEditorState().read(() => {
-      const root = $getRoot();
-      
-      const collectEndnotes = (node) => {
-        if (node.getType && node.getType() === 'footnote') {
-          endnoteData[node.__footnoteId] = {
-            text: node.getTextContent(),
-            value: node.__endnoteValue || '',
-            ref: node.__endnoteRef || `endnote-ref-${node.__footnoteId}`
-          };
-        }
-        
-        if (node.getChildren) {
-          node.getChildren().forEach(collectEndnotes);
-        }
-      };
-      
-      root.getChildren().forEach(collectEndnotes);
-    });
-  } catch (e) {
-    console.warn('Could not collect endnote data from editor:', e);
-  }
-  
-  // Add data attributes to endnote spans in HTML
-  return html.replace(
-    /<span([^>]*?)>([^<]*?)<sup>\[(\d+)\]<\/sup><\/span>/g,
-    (match, attributes, text, id) => {
-      const data = endnoteData[id];
-      if (data) {
-        return `<span${attributes} data-endnote-id="${id}" data-endnote-text="${text}" data-endnote-value="${data.value}">${text}<sup>[${id}]</sup></span>`;
-      }
-      return match;
-    }
-  );
-};
-
-
 export const exportLexicalHtml = (editor) => {
   if (editor === undefined) return '';
   let html = '';
@@ -163,12 +119,11 @@ export const exportLexicalHtml = (editor) => {
   // Apply table styles
   html = addCustomHtmlStyles(html, tableAlignments, tableWidths, tableColumnWidths);
 
-  // Preserve endnote data in HTML
-  html = preserveEndnoteData(html, editor);
+  // Add endnote attributes for proper extraction
+  html = addEndnoteAttributes(html);
 
   return html;
 };
-
 
 export const importLexicalHtml = (editor, value) => {
   editor.update(
