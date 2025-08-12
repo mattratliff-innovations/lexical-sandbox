@@ -125,6 +125,7 @@ export default function LexicalEditor({
 
   const [editorReady, setEditorReady] = useState(false);
   const editorRef = useRef(null);
+  const [preventToolbarClose, setPreventToolbarClose] = useState(false);
 
   // Refs
   const containerRef = useRef(null);
@@ -138,9 +139,14 @@ export default function LexicalEditor({
     setCanCreateEndnote(canCreate);
   }, []);
 
-  const handleSetCurrentEndnote = useCallback((endnoteNode) => {
-    setCurrentEndnote(endnoteNode);
-  }, []);
+const handleSetCurrentEndnote = useCallback((endnoteNode) => {
+  if (endnoteNode) {
+    // Prevent toolbar from closing when we detect an endnote
+    setPreventToolbarClose(true);
+    setTimeout(() => setPreventToolbarClose(false), 500);
+  }
+  setCurrentEndnote(endnoteNode);
+}, []);
 
   // Add event listener for endnote click events
   useEffect(() => {
@@ -247,23 +253,24 @@ const isTargetInsideOfEditor = useCallback(
 
 useEffect(() => {
   const handleFocusOutside = (event) => {
+    // Don't close toolbar if we're in the middle of an endnote operation
+    if (preventToolbarClose) {
+      console.log('LexicalEditor - Preventing toolbar close during endnote operation');
+      return;
+    }
+    
     const eventTarget = event.type === 'mousedown' ? event.target : event.relatedTarget;
     
     if (!isTargetInsideOfEditor(eventTarget)) {
-      // Add a longer delay to allow endnote operations to complete
-      setTimeout(() => {
-        // Double-check that we're still not in an editor before closing
-        if (!containerRef.current?.contains(document.activeElement)) {
-          setIsToolbarActive(false);
-          setIsEditorActive(false);
-        }
-      }, 200);
+      setIsToolbarActive(false);
+      setIsEditorActive(false);
     }
   };
 
   document.addEventListener('mousedown', handleFocusOutside);
   return () => document.removeEventListener('mousedown', handleFocusOutside);
-}, [isTargetInsideOfEditor]);
+}, [isTargetInsideOfEditor, preventToolbarClose]);
+
 
   // This useEffect is for proper focusing on a button as we move sections up and down
   useEffect(() => {
