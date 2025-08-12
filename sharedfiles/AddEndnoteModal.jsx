@@ -64,14 +64,14 @@ export default function AddEndnoteModal({ showAddEndnoteModal, setShowAddEndnote
     console.log('AddEndnoteModal useEffect triggered - showModal:', showAddEndnoteModal);
     console.log('AddEndnoteModal - currentEndnote prop:', currentEndnote);
     console.log('AddEndnoteModal - window.currentEndnoteContext:', window.currentEndnoteContext);
-    console.log('AddEndnoteModal - window.draftState:', window.draftState);
+    console.log('AddEndnoteModal - window.globalEndNotes:', window.globalEndNotes);
     
     if (showAddEndnoteModal) {
       // Use currentEndnote prop first, then check global context
       let endnoteToEdit = currentEndnote || window.currentEndnoteContext;
       
       // If we still don't have an endnote to edit, try one more detection attempt
-      if (!endnoteToEdit && editor && window.draftState?.endNotes) {
+      if (!endnoteToEdit && editor && window.globalEndNotes && window.globalEndNotes.length > 0) {
         console.log('AddEndnoteModal - Attempting fallback endnote detection');
         
         editor.getEditorState().read(() => {
@@ -100,7 +100,7 @@ export default function AddEndnoteModal({ showAddEndnoteModal, setShowAddEndnote
               console.log('AddEndnoteModal - Fallback text sources:', allTextContent);
               
               // Search through all endnotes for any matches
-              for (const endnote of window.draftState.endNotes) {
+              for (const endnote of window.globalEndNotes) {
                 for (const textSource of allTextContent) {
                   if (textSource && (
                     textSource.includes(endnote.text) ||
@@ -189,21 +189,34 @@ export default function AddEndnoteModal({ showAddEndnoteModal, setShowAddEndnote
       // Update existing endnote
       const endnoteId = endnoteToUpdate.__footnoteId || endnoteToUpdate.getEndnoteId();
       
-      // Update the draft state endnotes
-      if (window.draftState?.endNotes) {
-        const updatedEndNotes = window.draftState.endNotes.map(note => 
+      console.log('AddEndnoteModal - Updating endnote ID:', endnoteId, 'with value:', endnoteValue);
+      
+      // Update the global endnotes array
+      if (window.globalEndNotes && window.globalEndNotes.length > 0) {
+        const updatedEndNotes = window.globalEndNotes.map(note => 
           note.index === endnoteId 
             ? { ...note, value: endnoteValue, text: selectedWord }
             : note
         );
         
-        // Update global state (this should trigger a save)
+        console.log('AddEndnoteModal - Updated endnotes:', updatedEndNotes);
+        
+        // Update global state
+        window.globalEndNotes = updatedEndNotes;
+        
+        // Update draft state if available
         if (window.updateDraftEndNotes) {
           window.updateDraftEndNotes(updatedEndNotes);
+        }
+        
+        // Also try to update window.draftState directly
+        if (window.draftState) {
+          window.draftState.endNotes = updatedEndNotes;
         }
       }
     } else {
       // Create new endnote
+      console.log('AddEndnoteModal - Creating new endnote with value:', endnoteValue);
       editor.dispatchCommand(INSERT_FOOTNOTE_COMMAND, endnoteValue);
     }
 
