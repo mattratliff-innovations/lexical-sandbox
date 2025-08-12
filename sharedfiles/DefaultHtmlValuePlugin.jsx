@@ -180,13 +180,27 @@ export default function DefaultHtmlValuePlugin({ initialValue = '', onChange = (
         // Clear existing content
         root.clear();
         
-        // Process nodes to convert endnote patterns to EndnoteNodes
-        const processedNodes = processNodesForEndnotes(nodes);
+        // Instead of complex recursive processing, use a simpler approach
+        // Just append the nodes and let Lexical handle the conversion
+        const finalNodes = [];
         
-        console.log(`Generated ${processedNodes.length} processed nodes`);
+        nodes.forEach(node => {
+          if (node.getType && node.getType() === 'text') {
+            const textContent = node.getTextContent();
+            // Check if this text contains endnote patterns
+            const endnoteNodes = processTextNodeForEndnotes(textContent);
+            finalNodes.push(...endnoteNodes);
+          } else {
+            finalNodes.push(node);
+          }
+        });
+        
+        console.log(`Generated ${finalNodes.length} final nodes`);
         
         // Append processed nodes to root
-        root.append(...processedNodes);
+        if (finalNodes.length > 0) {
+          root.append(...finalNodes);
+        }
         
         // Trigger onChange after processing
         setTimeout(() => {
