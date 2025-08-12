@@ -18,6 +18,9 @@ import './ScribeDocument.css';
 import SnippetPlugin from './lexical/letterEditor/plugins/SnippetPlugin';
 import { getEnclosuresHtml, getEndNotesHtml, extractEndnotesFromHtml } from '../../LetterUtil';
 
+import { $getRoot, $createTextNode } from 'lexical';
+import { $createEndnoteNode } from './lexical/EndnotePlugin';
+
 const EditorSection = styled.div``;
 
 const HEADER_ROW_COL_LIST = ['row1Col1', 'row1Col2', 'row2Col1', 'row2Col2', 'row3Col1', 'row3Col2'];
@@ -316,6 +319,108 @@ const ScribeDocument = forwardRef(
       setDraftState({ ...draft, ...{ sections: nextSections } });
       setOrganizationSignature(findOrganizationSignature(draft));
     }, [draft]);
+
+    useEffect(() => {
+  // Restore endnotes when draft state changes
+  if (draftState?.endNotes && Array.isArray(draftState.endNotes) && draftState.endNotes.length > 0) {
+    console.log('ScribeDocument - Restoring endnotes from draft state:', draftState.endNotes);
+    
+    // Initialize global endnote manager
+    if (window.endnoteManager) {
+      window.endnoteManager.initializeFromLetter({ endNotes: draftState.endNotes });
+    }
+    
+    // Scan all editors and convert text patterns back to endnote nodes
+    setTimeout(() => {
+      Object.entries(editorsRef.current).forEach(([editorKey, editor]) => {
+        if (editor) {
+          console.log(`ScribeDocument - Scanning editor ${editorKey} for endnote restoration`);
+          
+          editor.update(() => {
+            const root = $getRoot();
+            let restoredCount = 0;
+            
+            const scanAndRestore = (node) => {
+              // Look for text nodes that contain endnote patterns
+              if (node.getType && node.getType() === 'extended-text') {
+                const text = node.getTextContent();
+                const endnotePattern = /([^[]*)\[(\d+)\]/g;
+                const matches = [];
+                let match;
+                
+                // Find all endnote patterns in the text
+                while ((match = endnotePattern.exec(text)) !== null) {
+                  matches.push({
+                    fullText: match[0],
+                    beforeText: match[1],
+                    endnoteId: match[2],
+                    startIndex: match.index,
+                    endIndex: match.index + match[0].length
+                  });
+                }
+                
+                // Process matches in reverse order to maintain text positions
+                matches.reverse().forEach(matchData => {
+                  const endnoteData = draftState.endNotes.find(e => 
+                    String(e.index) === matchData.endnoteId
+                  );
+                  
+                  if (endnoteData) {
+                    console.log(`ScribeDocument - Restoring endnote ${matchData.endnoteId} in ${editorKey}`);
+                    
+                    // Split the text and replace with endnote node
+                    const beforeMatch = text.substring(0, matchData.startIndex);
+                    const afterMatch = text.substring(matchData.endIndex);
+                    
+                    const newNodes = [];
+                    
+                    // Add text before the endnote if it exists
+                    if (beforeMatch) {
+                      newNodes.push($createTextNode(beforeMatch));
+                    }
+                    
+                    // Add the endnote node
+                    const endnoteNode = $createEndnoteNode(
+                      matchData.beforeText, 
+                      parseInt(matchData.endnoteId), 
+                      endnoteData.value || ''
+                    );
+                    newNodes.push(endnoteNode);
+                    
+                    // Add text after the endnote if it exists
+                    if (afterMatch) {
+                      newNodes.push($createTextNode(afterMatch));
+                    }
+                    
+                    // Replace the original text node
+                    if (newNodes.length > 0) {
+                      node.replace(newNodes[0]);
+                      for (let i = 1; i < newNodes.length; i++) {
+                        newNodes[i - 1].insertAfter(newNodes[i]);
+                      }
+                      restoredCount++;
+                    }
+                  }
+                });
+              }
+              
+              // Recursively scan child nodes
+              if (node.getChildren) {
+                node.getChildren().forEach(scanAndRestore);
+              }
+            };
+            
+            root.getChildren().forEach(scanAndRestore);
+            
+            if (restoredCount > 0) {
+              console.log(`ScribeDocument - Restored ${restoredCount} endnotes in editor ${editorKey}`);
+            }
+          });
+        }
+      });
+    }, 1000); // Give editors time to fully initialize
+  }
+}, [draftState?.endNotes]);
 
     return (
       <DataContext.Provider value={contextValue}>

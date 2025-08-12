@@ -201,23 +201,80 @@ function $getSelectedEndnoteNode(selection) {
   }
 
   const nodes = selection.getNodes();
+  console.log('EndnotePlugin - Checking selection nodes:', nodes.length);
+  
+  // First check if any selected nodes are endnote nodes
   for (const node of nodes) {
+    console.log('EndnotePlugin - Node type:', node.getType?.(), 'Is endnote:', $isEndnoteNode(node));
+    
     if ($isEndnoteNode(node)) {
+      console.log('EndnotePlugin - Found endnote node directly:', {
+        id: node.getEndnoteId(),
+        text: node.getTextContent(),
+        value: node.getEndnoteValue()
+      });
       return node;
     }
-    // Check if cursor is within an endnote node
-    const parent = node.getParent();
-    if (parent && $isEndnoteNode(parent)) {
-      return parent;
+    
+    // Check parent nodes for endnote
+    let parent = node.getParent();
+    while (parent) {
+      if ($isEndnoteNode(parent)) {
+        console.log('EndnotePlugin - Found endnote in parent:', {
+          id: parent.getEndnoteId(),
+          text: parent.getTextContent(),
+          value: parent.getEndnoteValue()
+        });
+        return parent;
+      }
+      parent = parent.getParent();
     }
   }
 
-  // Check if cursor is positioned within an endnote
+  // Check anchor node
   const anchorNode = selection.anchor.getNode();
+  console.log('EndnotePlugin - Checking anchor node:', anchorNode.getType?.());
+  
   if ($isEndnoteNode(anchorNode)) {
+    console.log('EndnotePlugin - Anchor is endnote node');
     return anchorNode;
   }
 
+  // Check if we're clicking on text that looks like an endnote
+  if (anchorNode.getType?.() === 'extended-text') {
+    const text = anchorNode.getTextContent();
+    const endnotePattern = /([^[]*)\[(\d+)\]/;
+    const match = text.match(endnotePattern);
+    
+    if (match) {
+      console.log('EndnotePlugin - Found endnote pattern in text:', match);
+      const [_, beforeText, endnoteId] = match;
+      
+      // Check if we have this endnote in our global manager
+      if (window.endnoteManager) {
+        const allEndnotes = window.endnoteManager.getAllEndnotes();
+        const endnoteData = allEndnotes.find(e => String(e.index) === endnoteId);
+        
+        if (endnoteData) {
+          console.log('EndnotePlugin - Converting text back to endnote node');
+          
+          // Convert this text node back to an endnote node
+          editor.update(() => {
+            const endnoteNode = $createEndnoteNode(beforeText, parseInt(endnoteId), endnoteData.value);
+            anchorNode.replace(endnoteNode);
+          });
+          
+          return {
+            getEndnoteId: () => parseInt(endnoteId),
+            getTextContent: () => beforeText,
+            getEndnoteValue: () => endnoteData.value || ''
+          };
+        }
+      }
+    }
+  }
+
+  console.log('EndnotePlugin - No endnote node found in selection');
   return null;
 }
 
