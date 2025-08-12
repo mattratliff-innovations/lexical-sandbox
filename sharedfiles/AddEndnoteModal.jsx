@@ -6,7 +6,7 @@ import { useDataContext } from '../DataContext';
 import { ScribeModal, XCloseBtn } from '../../../../components/ScribeComponents';
 import { H1 } from '../../../../components/typography';
 import { HeaderContainer, Body, Footer } from '../../../util/modalDesignComponents';
-import { INSERT_FOOTNOTE_COMMAND } from '../EndnotePlugin';
+import { INSERT_FOOTNOTE_COMMAND, createEndnoteSafely } from '../EndnotePlugin';
 
 const StyledTextArea = styled.textarea`
   width: 100%;
@@ -129,65 +129,142 @@ export default function AddEndnoteModal({
     setShowAddEndnoteModal(false);
   };
 
-  const handleSubmit = () => {
-    const trimmedText = endnoteText.trim();
+  // const handleSubmit = () => {
+  //   const trimmedText = endnoteText.trim();
     
-    if (!trimmedText) {
-      console.log('AddEndnoteModal - No text provided, not submitting');
-      return;
-    }
+  //   if (!trimmedText) {
+  //     console.log('AddEndnoteModal - No text provided, not submitting');
+  //     return;
+  //   }
 
-    console.log('AddEndnoteModal - Submitting endnote:', {
-      isEditing,
-      endnoteId,
-      text: trimmedText
-    });
+  //   console.log('AddEndnoteModal - Submitting endnote:', {
+  //     isEditing,
+  //     endnoteId,
+  //     text: trimmedText
+  //   });
 
-    if (isEditing && endnoteId) {
-      // Update existing endnote
-      console.log('AddEndnoteModal - Updating existing endnote');
+  //   if (isEditing && endnoteId) {
+  //     // Update existing endnote
+  //     console.log('AddEndnoteModal - Updating existing endnote');
       
-      // Update in global endnote manager
-      if (window.endnoteManager) {
-        window.endnoteManager.updateEndnote(parseInt(endnoteId), trimmedText);
-        console.log('AddEndnoteModal - Updated in global manager');
-      }
+  //     // Update in global endnote manager
+  //     if (window.endnoteManager) {
+  //       window.endnoteManager.updateEndnote(parseInt(endnoteId), trimmedText);
+  //       console.log('AddEndnoteModal - Updated in global manager');
+  //     }
 
-      // Update in Lexical editor if available
-      if (window.updateEndnote) {
-        window.updateEndnote(parseInt(endnoteId), trimmedText);
-        console.log('AddEndnoteModal - Updated in Lexical editor');
-      }
+  //     // Update in Lexical editor if available
+  //     if (window.updateEndnote) {
+  //       window.updateEndnote(parseInt(endnoteId), trimmedText);
+  //       console.log('AddEndnoteModal - Updated in Lexical editor');
+  //     }
 
-      // Update draft state
-      setDraftState(currentDraftState => {
-        const updatedEndNotes = (currentDraftState.endNotes || []).map(note => 
-          String(note.index) === String(endnoteId) 
-            ? { ...note, value: trimmedText }
-            : note
-        );
+  //     // Update draft state
+  //     setDraftState(currentDraftState => {
+  //       const updatedEndNotes = (currentDraftState.endNotes || []).map(note => 
+  //         String(note.index) === String(endnoteId) 
+  //           ? { ...note, value: trimmedText }
+  //           : note
+  //       );
         
-        console.log('AddEndnoteModal - Updated draft state endnotes:', updatedEndNotes);
-        return { ...currentDraftState, endNotes: updatedEndNotes };
-      });
+  //       console.log('AddEndnoteModal - Updated draft state endnotes:', updatedEndNotes);
+  //       return { ...currentDraftState, endNotes: updatedEndNotes };
+  //     });
       
-    } else {
-      // Create new endnote
-      console.log('AddEndnoteModal - Creating new endnote');
+  //   } else {
+  //     // Create new endnote
+  //     console.log('AddEndnoteModal - Creating new endnote');
       
-      // Dispatch command to create new endnote in the editor
-      if (window.lexicalEditor) {
-        try {
-          window.lexicalEditor.dispatchCommand(INSERT_FOOTNOTE_COMMAND, trimmedText);
-          console.log('AddEndnoteModal - Dispatched INSERT_FOOTNOTE_COMMAND');
-        } catch (error) {
-          console.error('AddEndnoteModal - Error dispatching command:', error);
-        }
-      }
+  //     // Dispatch command to create new endnote in the editor
+  //     if (window.lexicalEditor) {
+  //       try {
+  //         window.lexicalEditor.dispatchCommand(INSERT_FOOTNOTE_COMMAND, trimmedText);
+  //         console.log('AddEndnoteModal - Dispatched INSERT_FOOTNOTE_COMMAND');
+  //       } catch (error) {
+  //         console.error('AddEndnoteModal - Error dispatching command:', error);
+  //       }
+  //     }
+  //   }
+
+  //   handleClose();
+  // };
+
+  const handleSubmit = () => {
+  const trimmedText = endnoteText.trim();
+  
+  if (!trimmedText) {
+    console.log('AddEndnoteModal - No text provided, not submitting');
+    return;
+  }
+
+  console.log('AddEndnoteModal - Submitting endnote:', {
+    isEditing,
+    endnoteId,
+    text: trimmedText
+  });
+
+  if (isEditing && endnoteId) {
+    // Update existing endnote
+    console.log('AddEndnoteModal - Updating existing endnote');
+    
+    // Update in global endnote manager
+    if (window.endnoteManager) {
+      window.endnoteManager.updateEndnote(parseInt(endnoteId), trimmedText);
+      console.log('AddEndnoteModal - Updated in global manager');
     }
 
-    handleClose();
-  };
+    // Update in Lexical editor if available
+    if (window.updateEndnote) {
+      window.updateEndnote(parseInt(endnoteId), trimmedText);
+      console.log('AddEndnoteModal - Updated in Lexical editor');
+    }
+
+    // Update draft state
+    setDraftState(currentDraftState => {
+      const updatedEndNotes = (currentDraftState.endNotes || []).map(note => 
+        String(note.index) === String(endnoteId) 
+          ? { ...note, value: trimmedText }
+          : note
+      );
+      
+      console.log('AddEndnoteModal - Updated draft state endnotes:', updatedEndNotes);
+      return { ...currentDraftState, endNotes: updatedEndNotes };
+    });
+    
+  } else {
+    // Create new endnote using the safe method
+    console.log('AddEndnoteModal - Creating new endnote');
+    
+    if (window.lexicalEditor) {
+      const success = createEndnoteSafely(window.lexicalEditor, trimmedText);
+      
+      if (success) {
+        console.log('AddEndnoteModal - Successfully created endnote');
+        
+        // Update draft state with the new endnote
+        const nextId = window.endnoteManager ? window.endnoteManager.counter - 1 : 1;
+        setDraftState(currentDraftState => {
+          const newEndnotes = [...(currentDraftState.endNotes || []), {
+            index: nextId,
+            text: 'Endnote',
+            value: trimmedText,
+            ref: `endnote-ref-${nextId}`
+          }];
+          
+          console.log('AddEndnoteModal - Updated draft state with new endnote:', newEndnotes);
+          return { ...currentDraftState, endNotes: newEndnotes };
+        });
+      } else {
+        console.error('AddEndnoteModal - Failed to create endnote');
+        // You could show an error message to the user here
+      }
+    } else {
+      console.error('AddEndnoteModal - No editor available');
+    }
+  }
+
+  handleClose();
+};
 
   const modalTitle = isEditing ? 'Edit Endnote' : 'Add Endnote';
   const submitText = isEditing ? 'Update' : 'Add';

@@ -3,6 +3,7 @@ import { $createTextNode, $getSelection, $isRangeSelection, $isTextNode, TextNod
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
 import { useEffect } from 'react';
 import { mergeRegister } from '@lexical/utils';
+import { $createParagraphNode } from 'lexical';
 import './EndnotePlugin.css';
 
 // Global endnote management
@@ -639,3 +640,100 @@ export function useEndnotePlugin(handleSetSelectedText, handleSetCanCreateEndnot
 
   return null;
 }
+
+export const createEndnoteSafely = (editor, endnoteValue = '') => {
+  if (!editor) {
+    console.error('createEndnoteSafely - No editor provided');
+    return false;
+  }
+
+  try {
+    editor.update(() => {
+      const selection = $getSelection();
+
+      if (!$isRangeSelection(selection)) {
+        console.log('createEndnoteSafely - No valid selection, creating placeholder endnote');
+        // Create a placeholder endnote at the end of the content
+        const root = $getRoot();
+        const lastChild = root.getLastChild();
+        
+        if (lastChild) {
+          const footnoteId = window.endnoteManager ? window.endnoteManager.getNextId() : 1;
+          const endnoteNode = $createEndnoteNode('Endnote', footnoteId, endnoteValue);
+          
+          // Append to the last paragraph or create a new one
+          if (lastChild.getType() === 'paragraph') {
+            lastChild.append($createTextNode(' '), endnoteNode);
+          } else {
+            const newParagraph = $createParagraphNode();
+            newParagraph.append(endnoteNode);
+            root.append(newParagraph);
+          }
+        }
+        return true;
+      }
+
+      const selectedText = selection.getTextContent();
+      const footnoteId = window.endnoteManager ? window.endnoteManager.getNextId() : 1;
+
+      if (selectedText.trim() === '') {
+        // Handle word selection at cursor
+        const nodes = selection.getNodes();
+        if (nodes.length > 0 && $isTextNode(nodes[0])) {
+          const textNode = nodes[0];
+          const text = textNode.getTextContent();
+          const { offset } = selection.anchor;
+
+          let start = offset;
+          let end = offset;
+
+          // Find word boundaries
+          while (start > 0 && /\w/.test(text[start - 1])) {
+            start--;
+          }
+          while (end < text.length && /\w/.test(text[end])) {
+            end++;
+          }
+
+          if (start < end) {
+            const wordText = text.substring(start, end);
+            const beforeText = text.substring(0, start);
+            const afterText = text.substring(end);
+
+            const nodes = [];
+            if (beforeText) {
+              nodes.push($createTextNode(beforeText));
+            }
+            nodes.push($createEndnoteNode(wordText, footnoteId, endnoteValue));
+            if (afterText) {
+              nodes.push($createTextNode(afterText));
+            }
+
+            if (nodes.length > 0) {
+              textNode.replace(nodes[0]);
+              for (let i = 1; i < nodes.length; i++) {
+                nodes[i - 1].insertAfter(nodes[i]);
+              }
+            }
+          } else {
+            // No word found, insert a placeholder
+            const endnoteNode = $createEndnoteNode('Endnote', footnoteId, endnoteValue);
+            selection.insertNodes([endnoteNode]);
+          }
+        }
+      } else {
+        // Replace selected text with endnote node
+        const footnoteNode = $createEndnoteNode(selectedText, footnoteId, endnoteValue);
+        selection.insertNodes([footnoteNode]);
+      }
+
+      console.log('createEndnoteSafely - Successfully created endnote with ID:', footnoteId);
+      return true;
+    });
+    
+    return true;
+  } catch (error) {
+    console.error('createEndnoteSafely - Error:', error);
+    return false;
+  }
+};
