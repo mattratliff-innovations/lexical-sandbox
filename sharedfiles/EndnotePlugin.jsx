@@ -254,6 +254,57 @@ function $isOnWord(selection) {
   return false;
 }
 
+// Function to check if cursor is on an endnote (for existing endnotes)
+function checkForEndnoteAtCursor(selection) {
+  if (!$isRangeSelection(selection)) {
+    return null;
+  }
+
+  // First check for actual EndnoteNode instances
+  const currentEndnoteNode = $getSelectedEndnoteNode(selection);
+  if (currentEndnoteNode) {
+    return currentEndnoteNode;
+  }
+
+  // Then check for text-based endnote patterns
+  const selectedText = selection.getTextContent();
+  
+  // If no selection, check if cursor is within an endnote pattern
+  if (selectedText.trim() === '') {
+    const anchorNode = selection.anchor.getNode();
+    if ($isTextNode(anchorNode)) {
+      const text = anchorNode.getTextContent();
+      const offset = selection.anchor.offset;
+      
+      // Look for endnote pattern around cursor position
+      const endnoteRegex = /([^[\]]+)\[(\d+)\]/g;
+      let match;
+      
+      while ((match = endnoteRegex.exec(text)) !== null) {
+        const matchStart = match.index;
+        const matchEnd = match.index + match[0].length;
+        
+        if (offset >= matchStart && offset <= matchEnd) {
+          const [fullMatch, endnoteText, footnoteId] = match;
+          return {
+            getEndnoteId: () => parseInt(footnoteId),
+            getTextContent: () => endnoteText,
+            getEndnoteValue: () => {
+              if (window.endnoteManager) {
+                const endnote = window.endnoteManager.endnotes.get(parseInt(footnoteId));
+                return endnote ? endnote.value : '';
+              }
+              return '';
+            }
+          };
+        }
+      }
+    }
+  }
+  
+  return null;
+}
+
 // Hook to register the footnote plugin
 export function useEndnotePlugin(handleSetSelectedText, handleSetCanCreateEndnote, handleSetCurrentEndnote) {
   const [editor] = useLexicalComposerContext();
@@ -261,18 +312,60 @@ export function useEndnotePlugin(handleSetSelectedText, handleSetCanCreateEndnot
   useEffect(() => {
     if (!editor) return;
 
-    let timeoutId;
+    // Function to parse existing endnotes from the editor content
+    const parseExistingEndnotes = () => {
+      editor.getEditorState().read(() => {
+        const root = $getRoot();
+        const textContent = root.getTextContent();
+        
+        // Look for endnote patterns like "word[1]", "phrase[2]", etc.
+        const endnoteRegex = /([^[\]]+)\[(\d+)\]/g;
+        let match;
+        
+        console.log('Parsing existing endnotes from content:', textContent);
+        
+        while ((match = endnoteRegex.exec(textContent)) !== null) {
+          const [fullMatch, text, footnoteId] = match;
+          const id = parseInt(footnoteId);
+          
+          console.log(`Found existing endnote: "${text}" with ID ${id}`);
+          
+          // Register with global endnote manager if not already present
+          if (window.endnoteManager && !window.endnoteManager.endnotes.has(id)) {
+            // Try to get the endnote value from existing data or use empty string
+            const existingEndnote = window.endnoteManager.getAllEndnotes().find(e => e.index === id);
+            const endnoteValue = existingEndnote ? existingEndnote.value : '';
+            
+            window.endnoteManager.addEndnote(id, text, endnoteValue, `endnote-ref-${id}`);
+            console.log(`Registered existing endnote ${id}: "${text}"`);
+          }
+        }
+        
+        // Update counter to be higher than any existing endnote
+        if (window.endnoteManager) {
+          const allEndnotes = window.endnoteManager.getAllEndnotes();
+          if (allEndnotes.length > 0) {
+            const maxId = Math.max(...allEndnotes.map(e => parseInt(e.index)));
+            if (maxId >= window.endnoteManager.counter) {
+              window.endnoteManager.counter = maxId + 1;
+              console.log(`Updated endnote counter to ${window.endnoteManager.counter}`);
+            }
+          }
+        }
+      });
+    };
+
+    // Parse existing endnotes when the plugin initializes
+    const timeoutId = setTimeout(() => {
+      parseExistingEndnotes();
+    }, 100); // Small delay to ensure content is loaded
 
     const checkForSelectedText = () => {
-      if (timeoutId) clearTimeout(timeoutId);
-
-      timeoutId = setTimeout(() => {
-        editor.update(() => {
-          const root = $getRoot();
-          const textContent = root.getTextContent();
-          console.log('textContent = ', textContent.trim());
-        });
-      }, 500);
+      editor.update(() => {
+        const root = $getRoot();
+        const textContent = root.getTextContent();
+        console.log('textContent = ', textContent.trim());
+      });
     };
 
     const checkSelection = () => {
@@ -281,10 +374,11 @@ export function useEndnotePlugin(handleSetSelectedText, handleSetCanCreateEndnot
         if ($isRangeSelection(selection)) {
           const selectedText = selection.getTextContent();
           const canCreateEndnote = $isOnWord(selection);
-          const currentEndnoteNode = $getSelectedEndnoteNode(selection);
+          const currentEndnoteNode = checkForEndnoteAtCursor(selection);
 
           handleSetSelectedText(selectedText);
-          handleSetCanCreateEndnote(canCreateEndnote);
+          // Allow creating endnote if user can create one OR we're on an existing endnote
+          handleSetCanCreateEndnote(canCreateEndnote || !!currentEndnoteNode);
           handleSetCurrentEndnote(currentEndnoteNode);
         } else {
           handleSetSelectedText('');
@@ -302,7 +396,7 @@ export function useEndnotePlugin(handleSetSelectedText, handleSetCanCreateEndnot
     });
 
     return () => {
-      if (timeoutId) clearTimeout(timeoutId);
+      clearTimeout(timeoutId);
       removeUpdateListener();
     };
   }, [editor, handleSetSelectedText, handleSetCanCreateEndnote, handleSetCurrentEndnote]);
@@ -384,6 +478,9 @@ export function useEndnotePlugin(handleSetSelectedText, handleSetCanCreateEndnot
     };
 
     const updateEndnote = (footnoteId, newValue) => {
+      // First try to update actual EndnoteNode instances
+      let nodeFound = false;
+      
       editor.update(() => {
         const root = $getRoot();
 
@@ -391,6 +488,7 @@ export function useEndnotePlugin(handleSetSelectedText, handleSetCanCreateEndnot
         const findAndUpdateEndnote = (node) => {
           if ($isEndnoteNode(node) && node.getEndnoteId() === footnoteId) {
             node.setEndnoteValue(newValue);
+            nodeFound = true;
             return true;
           }
 
@@ -405,6 +503,13 @@ export function useEndnotePlugin(handleSetSelectedText, handleSetCanCreateEndnot
 
         findAndUpdateEndnote(root);
       });
+
+      // If no EndnoteNode was found, update the global endnote manager
+      // (this handles text-based endnotes)
+      if (!nodeFound && window.endnoteManager) {
+        window.endnoteManager.updateEndnote(footnoteId, newValue);
+        console.log(`Updated text-based endnote ${footnoteId} with new value: "${newValue}"`);
+      }
     };
 
     // Store the update function globally for access from modal
