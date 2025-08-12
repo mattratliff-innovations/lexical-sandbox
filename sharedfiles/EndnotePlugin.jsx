@@ -103,12 +103,6 @@ export class EndnoteNode extends TextNode {
     }
   }
 
-  static transform() {
-    // This method is called when the node is being transformed
-    // Return the node constructor for proper registration
-    return EndnoteNode;
-  }
-
   getEndnoteId() {
     return this.__footnoteId;
   }
@@ -227,14 +221,37 @@ function $getSelectedEndnoteNode(selection) {
   return null;
 }
 
-// Helper function to check if there is actual selected text
-function $hasSelectedText(selection) {
+// Helper function to check if cursor is on a word
+function $isOnWord(selection) {
   if (!$isRangeSelection(selection)) {
     return false;
   }
 
   const selectedText = selection.getTextContent();
-  return selectedText.trim() !== '';
+
+  // If there's selected text, return true
+  if (selectedText.trim() !== '') {
+    return true;
+  }
+
+  // If no text is selected, check if cursor is on a word
+  const nodes = selection.getNodes();
+  if (nodes.length > 0 && $isTextNode(nodes[0])) {
+    const textNode = nodes[0];
+    const text = textNode.getTextContent();
+    const { offset } = selection.anchor;
+
+    // Check if cursor is within a word
+    if (offset > 0 && offset < text.length) {
+      return /\w/.test(text[offset - 1]) || /\w/.test(text[offset]);
+    } else if (offset === 0) {
+      return /\w/.test(text[offset]);
+    } else if (offset === text.length) {
+      return /\w/.test(text[offset - 1]);
+    }
+  }
+
+  return false;
 }
 
 // Hook to register the footnote plugin
@@ -243,12 +260,6 @@ export function useEndnotePlugin(handleSetSelectedText, handleSetCanCreateEndnot
 
   useEffect(() => {
     if (!editor) return;
-
-    // Register the EndnoteNode with the editor
-    const unregisterNode = editor.registerNodeTransform(EndnoteNode, (node) => {
-      // This ensures the node is properly registered
-      return node;
-    });
 
     let timeoutId;
 
@@ -269,12 +280,11 @@ export function useEndnotePlugin(handleSetSelectedText, handleSetCanCreateEndnot
         const selection = $getSelection();
         if ($isRangeSelection(selection)) {
           const selectedText = selection.getTextContent();
-          const hasSelectedText = $hasSelectedText(selection);
+          const canCreateEndnote = $isOnWord(selection);
           const currentEndnoteNode = $getSelectedEndnoteNode(selection);
 
           handleSetSelectedText(selectedText);
-          // Only allow creating endnote if there is actual selected text OR we're on an existing endnote
-          handleSetCanCreateEndnote(hasSelectedText || !!currentEndnoteNode);
+          handleSetCanCreateEndnote(canCreateEndnote);
           handleSetCurrentEndnote(currentEndnoteNode);
         } else {
           handleSetSelectedText('');
@@ -294,7 +304,6 @@ export function useEndnotePlugin(handleSetSelectedText, handleSetCanCreateEndnot
     return () => {
       if (timeoutId) clearTimeout(timeoutId);
       removeUpdateListener();
-      unregisterNode();
     };
   }, [editor, handleSetSelectedText, handleSetCanCreateEndnote, handleSetCurrentEndnote]);
 
@@ -317,20 +326,59 @@ export function useEndnotePlugin(handleSetSelectedText, handleSetCanCreateEndnot
         // Get next global endnote ID
         const footnoteId = window.endnoteManager ? window.endnoteManager.getNextId() : 1;
 
-        // Only proceed if there is actual selected text
-        if (selectedText.trim() !== '') {
-          // Create a simple text replacement with endnote marker
-          const endnoteText = `${selectedText}[${footnoteId}]`;
-          
-          // Replace the selected text
-          selection.insertText(endnoteText);
-          
-          // Register with endnote manager for tracking
-          if (window.endnoteManager) {
-            window.endnoteManager.addEndnote(footnoteId, selectedText, endnoteValue, `endnote-ref-${footnoteId}`);
+        if (selectedText.trim() === '') {
+          // If no text is selected, try to select the word at cursor
+          const nodes = selection.getNodes();
+          if (nodes.length > 0 && $isTextNode(nodes[0])) {
+            const textNode = nodes[0];
+            const text = textNode.getTextContent();
+            const { offset } = selection.anchor;
+
+            // Find word boundaries
+            let start = offset;
+            let end = offset;
+
+            // Find start of word
+            while (start > 0 && /\w/.test(text[start - 1])) {
+              start--;
+            }
+
+            // Find end of word
+            while (end < text.length && /\w/.test(text[end])) {
+              end++;
+            }
+
+            if (start < end) {
+              const wordText = text.substring(start, end);
+
+              // Split the text node and replace the word with footnote node
+              const beforeText = text.substring(0, start);
+              const afterText = text.substring(end);
+
+              const nodes = [];
+
+              if (beforeText) {
+                nodes.push($createTextNode(beforeText));
+              }
+
+              nodes.push($createEndnoteNode(wordText, footnoteId, endnoteValue));
+
+              if (afterText) {
+                nodes.push($createTextNode(afterText));
+              }
+
+              if (nodes.length > 0) {
+                textNode.replace(nodes[0]);
+                for (let i = 1; i < nodes.length; i++) {
+                  nodes[i - 1].insertAfter(nodes[i]);
+                }
+              }
+            }
           }
-          
-          console.log(`Created endnote ${footnoteId} for "${selectedText}" with value: "${endnoteValue}"`);
+        } else {
+          // Replace selected text with footnote node
+          const endnoteNodes = $createEndnoteNode(selectedText, footnoteId, endnoteValue);
+          selection.insertNodes([endnoteNodes]);
         }
       });
     };

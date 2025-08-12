@@ -14,9 +14,7 @@ import SnippetSelectorNode from './letterEditor/nodes/SnippetSelectorNode';
 import LetterDateNode from './letterEditor/nodes/LetterDateNode';
 import './lexicalTable.css';
 import AlienNumberNode from './letterEditor/nodes/AlienNumberNode';
-// Import EndnoteNode - adjust path based on your file structure
-// The path might need to be different based on where EndnotePlugin.jsx is located
-import { EndnoteNode } from './letterEditor/plugins/EndnotePlugin';
+import { EndnoteNode } from './EndnotePlugin';
 
 const getTableAlignments = (editor) => {
   const alignments = [];
@@ -207,17 +205,15 @@ export const editorConfig = {
     OrganizationNameNode,
     LetterDateNode,
     AlienNumberNode,
-    // Register EndnoteNode as a function to avoid constructor issues
-    () => EndnoteNode,
     { replace: TextNode, with: (node) => new ExtendedTextNode(node.__text) },
     ListNode,
     TableCellNode,
     TableNode,
     TableRowNode,
+    EndnoteNode,
   ],
   // Handling of errors during update
   onError(error) {
-    console.error('Lexical Editor Error:', error);
     throw error;
   },
   theme: LexicalTheme,
