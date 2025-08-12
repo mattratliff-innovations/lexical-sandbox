@@ -195,15 +195,31 @@ export default function ToolbarPlugin({
     });
   };
 
+  // const handleEndnoteAction = () => {
+  //   if (currentEndnote) {
+  //     // If we're on an existing endnote, show the modal to edit it
+  //     setShowAddEndnoteModal(true);
+  //   } else if (canCreateEndnote) {
+  //     // If we can create a new endnote, show the modal to create it
+  //     setShowAddEndnoteModal(true);
+  //   }
+  // };
+
   const handleEndnoteAction = () => {
-    if (currentEndnote) {
-      // If we're on an existing endnote, show the modal to edit it
-      setShowAddEndnoteModal(true);
-    } else if (canCreateEndnote) {
-      // If we can create a new endnote, show the modal to create it
-      setShowAddEndnoteModal(true);
-    }
-  };
+  console.log('ToolbarPlugin - handleEndnoteAction called:', { currentEndnote, canCreateEndnote });
+  
+  if (currentEndnote) {
+    // If we're on an existing endnote, show the modal to edit it
+    console.log('ToolbarPlugin - Opening modal for existing endnote');
+    setShowAddEndnoteModal(true);
+  } else if (canCreateEndnote) {
+    // If we can create a new endnote, show the modal to create it
+    console.log('ToolbarPlugin - Opening modal for new endnote');
+    setShowAddEndnoteModal(true);
+  } else {
+    console.log('ToolbarPlugin - Cannot create or edit endnote');
+  }
+};
 
   const alignBtns = {
     alignleft: {
@@ -349,10 +365,18 @@ export default function ToolbarPlugin({
       icon: <ArrowDownRightSquareFill />,
       action: () => setShowAddContentModal(true),
     },
+    // endnote: {
+    //   id: 'endnote',
+    //   title: currentEndnote ? 'Edit Endnote' : 'Add Endnote',
+    //   ariaLabel: currentEndnote ? 'Edit Endnote' : 'Add Endnote',
+    //   readonly: !canCreateEndnote && !currentEndnote,
+    //   icon: <Journal />,
+    //   action: handleEndnoteAction,
+    // },
     endnote: {
       id: 'endnote',
-      title: currentEndnote ? 'Edit Endnote' : 'Add Endnote',
-      ariaLabel: currentEndnote ? 'Edit Endnote' : 'Add Endnote',
+      title: currentEndnote ? `Edit Endnote [${currentEndnote.getEndnoteId?.()}]` : 'Add Endnote',
+      ariaLabel: currentEndnote ? `Edit Endnote [${currentEndnote.getEndnoteId?.()}]` : 'Add Endnote',
       readonly: !canCreateEndnote && !currentEndnote,
       icon: <Journal />,
       action: handleEndnoteAction,

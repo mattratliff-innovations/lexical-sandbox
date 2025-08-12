@@ -143,22 +143,45 @@ export default function LexicalEditor({
   }, []);
 
   // Add event listener for endnote click events
-  useEffect(() => {
-    const handleEndnoteModalShow = (event) => {
-      const { id, text, value } = event.detail;
-      setCurrentEndnote({ 
-        getEndnoteId: () => id, 
-        getTextContent: () => text, 
-        getEndnoteValue: () => value 
-      });
-      setShowAddEndnoteModal(true);
-    };
+  // useEffect(() => {
+  //   const handleEndnoteModalShow = (event) => {
+  //     const { id, text, value } = event.detail;
+  //     setCurrentEndnote({ 
+  //       getEndnoteId: () => id, 
+  //       getTextContent: () => text, 
+  //       getEndnoteValue: () => value 
+  //     });
+  //     setShowAddEndnoteModal(true);
+  //   };
 
-    document.addEventListener('showEndnoteModal', handleEndnoteModalShow);
-    return () => {
-      document.removeEventListener('showEndnoteModal', handleEndnoteModalShow);
+  //   document.addEventListener('showEndnoteModal', handleEndnoteModalShow);
+  //   return () => {
+  //     document.removeEventListener('showEndnoteModal', handleEndnoteModalShow);
+  //   };
+  // }, []);
+
+  useEffect(() => {
+  const handleEndnoteModalShow = (event) => {
+    const { id, text, value } = event.detail;
+    console.log('LexicalEditor - Received showEndnoteModal event:', { id, text, value });
+    
+    // Create a mock endnote node object for the modal
+    const mockEndnoteNode = {
+      getEndnoteId: () => parseInt(id),
+      getTextContent: () => text || '',
+      getEndnoteValue: () => value || ''
     };
-  }, []);
+    
+    console.log('LexicalEditor - Setting currentEndnote:', mockEndnoteNode);
+    setCurrentEndnote(mockEndnoteNode);
+    setShowAddEndnoteModal(true);
+  };
+
+  document.addEventListener('showEndnoteModal', handleEndnoteModalShow);
+  return () => {
+    document.removeEventListener('showEndnoteModal', handleEndnoteModalShow);
+  };
+}, []);
 
   // Memoized handlers
   const isTargetInsideOfEditor = useCallback(

@@ -54,6 +54,13 @@ export default function AddEndnoteModal({
   // Determine if we're editing an existing endnote
   const isEditing = currentEndnote !== null;
   const endnoteId = currentEndnote?.getEndnoteId ? currentEndnote.getEndnoteId() : null;
+  
+  console.log('AddEndnoteModal - State check:', {
+    showAddEndnoteModal,
+    isEditing,
+    currentEndnote,
+    endnoteId
+  });
 
   // Find the endnote being edited
   const endnoteToEdit = useMemo(() => {
@@ -97,19 +104,25 @@ export default function AddEndnoteModal({
       showAddEndnoteModal,
       isEditing,
       endnoteToEdit,
-      currentEndnote
+      currentEndnote,
+      endnoteId
     });
 
     if (showAddEndnoteModal) {
       if (isEditing && endnoteToEdit) {
         console.log('AddEndnoteModal - Setting text for editing:', endnoteToEdit.value);
         setEndnoteText(endnoteToEdit.value || '');
+      } else if (isEditing && currentEndnote) {
+        // Fallback: get value directly from currentEndnote if endnoteToEdit is null
+        const directValue = currentEndnote.getEndnoteValue ? currentEndnote.getEndnoteValue() : '';
+        console.log('AddEndnoteModal - Using direct value from currentEndnote:', directValue);
+        setEndnoteText(directValue);
       } else {
         console.log('AddEndnoteModal - Clearing text for new endnote');
         setEndnoteText('');
       }
     }
-  }, [showAddEndnoteModal, isEditing, endnoteToEdit]);
+  }, [showAddEndnoteModal, isEditing, endnoteToEdit, currentEndnote, endnoteId]);
 
   const handleClose = () => {
     setEndnoteText('');
