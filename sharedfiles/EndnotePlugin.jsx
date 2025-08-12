@@ -276,19 +276,26 @@ function checkForEndnoteAtCursor(selection) {
       const text = anchorNode.getTextContent();
       const offset = selection.anchor.offset;
       
+      console.log(`Checking cursor at offset ${offset} in text: "${text}"`);
+      
       // Look for endnote pattern around cursor position
-      const endnoteRegex = /([^[\]]+)\[(\d+)\]/g;
+      // Use more flexible regex
+      const endnoteRegex = /(.+?)\[(\d+)\]/g;
       let match;
       
       while ((match = endnoteRegex.exec(text)) !== null) {
         const matchStart = match.index;
         const matchEnd = match.index + match[0].length;
         
+        console.log(`Found endnote pattern at ${matchStart}-${matchEnd}: "${match[0]}"`);
+        
         if (offset >= matchStart && offset <= matchEnd) {
           const [fullMatch, endnoteText, footnoteId] = match;
+          console.log(`Cursor is within endnote: "${endnoteText.trim()}" [${footnoteId}]`);
+          
           return {
             getEndnoteId: () => parseInt(footnoteId),
-            getTextContent: () => endnoteText,
+            getTextContent: () => endnoteText.trim(),
             getEndnoteValue: () => {
               if (window.endnoteManager) {
                 const endnote = window.endnoteManager.endnotes.get(parseInt(footnoteId));
@@ -318,17 +325,30 @@ export function useEndnotePlugin(handleSetSelectedText, handleSetCanCreateEndnot
         const root = $getRoot();
         const textContent = root.getTextContent();
         
-        // Look for endnote patterns like "word[1]", "phrase[2]", etc.
-        const endnoteRegex = /([^[\]]+)\[(\d+)\]/g;
-        let match;
-        
         console.log('Parsing existing endnotes from content:', textContent);
+        console.log('Text content length:', textContent.length);
+        
+        // Look for endnote patterns like "word[1]", "phrase[2]", etc.
+        // More flexible regex that handles various characters before the bracket
+        const endnoteRegex = /(.+?)\[(\d+)\]/g;
+        let match;
+        let foundCount = 0;
         
         while ((match = endnoteRegex.exec(textContent)) !== null) {
           const [fullMatch, text, footnoteId] = match;
           const id = parseInt(footnoteId);
+          foundCount++;
           
-          console.log(`Found existing endnote: "${text}" with ID ${id}`);
+          console.log(`Match ${foundCount}:`, {
+            fullMatch,
+            text: text.trim(),
+            footnoteId,
+            id,
+            startIndex: match.index
+          });
+          
+          // Clean up the text (remove extra whitespace)
+          const cleanText = text.trim();
           
           // Register with global endnote manager if not already present
           if (window.endnoteManager && !window.endnoteManager.endnotes.has(id)) {
@@ -336,14 +356,28 @@ export function useEndnotePlugin(handleSetSelectedText, handleSetCanCreateEndnot
             const existingEndnote = window.endnoteManager.getAllEndnotes().find(e => e.index === id);
             const endnoteValue = existingEndnote ? existingEndnote.value : '';
             
-            window.endnoteManager.addEndnote(id, text, endnoteValue, `endnote-ref-${id}`);
-            console.log(`Registered existing endnote ${id}: "${text}"`);
+            window.endnoteManager.addEndnote(id, cleanText, endnoteValue, `endnote-ref-${id}`);
+            console.log(`Registered existing endnote ${id}: "${cleanText}" with value: "${endnoteValue}"`);
+          } else if (window.endnoteManager && window.endnoteManager.endnotes.has(id)) {
+            console.log(`Endnote ${id} already exists in manager`);
           }
+        }
+        
+        console.log(`Total endnotes found: ${foundCount}`);
+        
+        // Also try a simpler test to see what patterns exist
+        const bracketMatches = textContent.match(/\[\d+\]/g);
+        if (bracketMatches) {
+          console.log('Found bracket patterns:', bracketMatches);
+        } else {
+          console.log('No bracket patterns found in text content');
         }
         
         // Update counter to be higher than any existing endnote
         if (window.endnoteManager) {
           const allEndnotes = window.endnoteManager.getAllEndnotes();
+          console.log('All endnotes in manager after parsing:', allEndnotes);
+          
           if (allEndnotes.length > 0) {
             const maxId = Math.max(...allEndnotes.map(e => parseInt(e.index)));
             if (maxId >= window.endnoteManager.counter) {
@@ -355,10 +389,68 @@ export function useEndnotePlugin(handleSetSelectedText, handleSetCanCreateEndnot
       });
     };
 
+    // Function to handle click events on text-based endnotes
+    const handleEditorClick = (event) => {
+      const target = event.target;
+      if (target && target.textContent) {
+        const text = target.textContent;
+        const clickPosition = getClickPositionInText(target, event);
+        
+        // Check if click is within an endnote pattern
+        const endnoteRegex = /(.+?)\[(\d+)\]/g;
+        let match;
+        
+        while ((match = endnoteRegex.exec(text)) !== null) {
+          const matchStart = match.index;
+          const matchEnd = match.index + match[0].length;
+          
+          if (clickPosition >= matchStart && clickPosition <= matchEnd) {
+            const [fullMatch, endnoteText, footnoteId] = match;
+            const id = parseInt(footnoteId);
+            
+            console.log(`Clicked on endnote: "${endnoteText.trim()}" [${id}]`);
+            
+            // Get endnote value from manager
+            const endnoteValue = window.endnoteManager?.endnotes.get(id)?.value || '';
+            
+            // Dispatch custom event to show modal
+            const customEvent = new CustomEvent('showEndnoteModal', {
+              detail: {
+                id,
+                text: endnoteText.trim(),
+                value: endnoteValue
+              }
+            });
+            document.dispatchEvent(customEvent);
+            
+            event.preventDefault();
+            event.stopPropagation();
+            break;
+          }
+        }
+      }
+    };
+
+    // Helper function to get click position within text
+    const getClickPositionInText = (element, event) => {
+      // This is a simplified approach - in practice, you might need more sophisticated positioning
+      const rect = element.getBoundingClientRect();
+      const clickX = event.clientX - rect.left;
+      const text = element.textContent;
+      const charWidth = rect.width / text.length; // Approximate character width
+      return Math.floor(clickX / charWidth);
+    };
+
     // Parse existing endnotes when the plugin initializes
     const timeoutId = setTimeout(() => {
       parseExistingEndnotes();
     }, 100); // Small delay to ensure content is loaded
+
+    // Add click listener to editor
+    const editorElement = editor.getRootElement();
+    if (editorElement) {
+      editorElement.addEventListener('click', handleEditorClick);
+    }
 
     const checkForSelectedText = () => {
       editor.update(() => {
@@ -398,6 +490,11 @@ export function useEndnotePlugin(handleSetSelectedText, handleSetCanCreateEndnot
     return () => {
       clearTimeout(timeoutId);
       removeUpdateListener();
+      
+      // Remove click listener
+      if (editorElement) {
+        editorElement.removeEventListener('click', handleEditorClick);
+      }
     };
   }, [editor, handleSetSelectedText, handleSetCanCreateEndnote, handleSetCurrentEndnote]);
 
