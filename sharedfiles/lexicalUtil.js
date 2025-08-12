@@ -205,12 +205,12 @@ export const editorConfig = {
     OrganizationNameNode,
     LetterDateNode,
     AlienNumberNode,
+    EndnoteNode, // Register EndnoteNode directly instead of in replacement
     { replace: TextNode, with: (node) => new ExtendedTextNode(node.__text) },
     ListNode,
     TableCellNode,
     TableNode,
     TableRowNode,
-    EndnoteNode,
   ],
   // Handling of errors during update
   onError(error) {

@@ -103,6 +103,12 @@ export class EndnoteNode extends TextNode {
     }
   }
 
+  static transform() {
+    // This method is called when the node is being transformed
+    // Return the node constructor for proper registration
+    return EndnoteNode;
+  }
+
   getEndnoteId() {
     return this.__footnoteId;
   }
@@ -187,7 +193,8 @@ export class EndnoteNode extends TextNode {
 }
 
 export function $createEndnoteNode(text, footnoteId, endnoteValue = '') {
-  return new EndnoteNode(text, footnoteId, endnoteValue);
+  const node = new EndnoteNode(text, footnoteId, endnoteValue);
+  return node;
 }
 
 export function $isEndnoteNode(node) {
@@ -306,9 +313,19 @@ export function useEndnotePlugin(handleSetSelectedText, handleSetCanCreateEndnot
 
         // Only proceed if there is actual selected text
         if (selectedText.trim() !== '') {
-          // Replace selected text with footnote node
-          const footnoteNode = $createEndnoteNode(selectedText, footnoteId, endnoteValue);
-          selection.insertNodes([footnoteNode]);
+          try {
+            // Create the footnote node
+            const footnoteNode = new EndnoteNode(selectedText, footnoteId, endnoteValue);
+            
+            // Replace the selection with the footnote node
+            selection.removeText();
+            selection.insertNodes([footnoteNode]);
+          } catch (error) {
+            console.error('Error creating endnote node:', error);
+            // Fallback: just insert text with brackets
+            const fallbackText = `${selectedText}[${footnoteId}]`;
+            selection.insertText(fallbackText);
+          }
         }
       });
     };
