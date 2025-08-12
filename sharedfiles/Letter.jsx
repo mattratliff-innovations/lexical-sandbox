@@ -296,12 +296,12 @@ export default function Letter() {
         if (response.data.vawa) {
           setShowVawaModal(true);
         }
-        
+
         // Initialize endnote manager from letter data
         if (window.endnoteManager) {
           window.endnoteManager.initializeFromLetter(response.data);
         }
-        
+
         setDraft(response.data);
         setDraftOrganization(response.data.organizationId);
 
@@ -316,14 +316,6 @@ export default function Letter() {
     const curHeight = letterEditorRef?.current?.portraitUsLetterRef?.current.getBoundingClientRect().height;
     if (curHeight !== letterHeight) setLetterHeight(curHeight);
   });
-
-  useEffect(() => {
-  // Initialize endnote manager when draft is loaded
-  if (draft?.endNotes && window.endnoteManager) {
-    console.log('Letter - Initializing endnote manager with draft:', draft.endNotes);
-    window.endnoteManager.initializeFromLetter(draft);
-  }
-}, [draft?.endNotes]);
 
   // Create editor configuration
   const scribeEditorConfig = {

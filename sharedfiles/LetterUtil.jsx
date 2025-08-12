@@ -9,10 +9,10 @@ export const LETTER_CLOSING = 'Sincerely,';
 const SIGNATURE_CLASS = 'dhs-signature-preview-image';
 
 const EndNotesContainer = styled.ul`
-    list-style-type: none;
-    padding: 0;
-    margin: 0;
-    margin-left:8px;
+  list-style-type: none;
+  padding: 0;
+  margin: 0;
+  margin-left: 8px;
 `;
 
 export const convertInchesToPixels = (inches) => inches / 0.01041666666; // Google said this is the number of inches in a pixel.
@@ -80,35 +80,35 @@ export const extractEndnotesFromHtml = (htmlContent) => {
     console.log('No HTML content provided to extractEndnotesFromHtml');
     return [];
   }
-  
+
   console.log('Extracting endnotes from HTML:', htmlContent);
-  
+
   // Create a temporary DOM element to parse the HTML
   const tempDiv = document.createElement('div');
   tempDiv.innerHTML = htmlContent;
-  
+
   const endnotes = [];
-  
+
   // Look for spans with footnote class and extract endnote data
   const allSpans = tempDiv.querySelectorAll('span');
   console.log(`Found ${allSpans.length} span elements`);
-  
+
   allSpans.forEach((element, idx) => {
     console.log(`Span ${idx}:`, element.outerHTML);
-    
+
     // Check if this is an endnote element by looking for the sup element with bracket notation
     const supElement = element.querySelector('sup');
     if (supElement && supElement.textContent.match(/\[(\d+)\]/)) {
       const match = supElement.textContent.match(/\[(\d+)\]/);
       const id = match[1];
       const text = element.childNodes[0]?.textContent || element.textContent.replace(supElement.textContent, '').trim();
-      
+
       console.log(`Found endnote: ID=${id}, text="${text}"`);
-      
+
       // Try to get the endnote value from data attributes or default to empty
       let value = element.getAttribute('data-endnote-value') || '';
       console.log(`Endnote value from data attribute: "${value}"`);
-      
+
       // If we can't find it in attributes, check if it's stored in the global endnote data
       if (!value && window.lexicalEditor) {
         try {
@@ -127,12 +127,12 @@ export const extractEndnotesFromHtml = (htmlContent) => {
           console.warn('Could not access endnote value from editor state:', e);
         }
       }
-      
-      if (id && !endnotes.find(note => note.index === id)) {
+
+      if (id && !endnotes.find((note) => note.index === id)) {
         const endnote = {
           index: id,
           value: value,
-          text: text
+          text: text,
         };
         console.log('Adding endnote:', endnote);
         endnotes.push(endnote);
@@ -141,9 +141,9 @@ export const extractEndnotesFromHtml = (htmlContent) => {
       console.log(`Span ${idx} is not an endnote`);
     }
   });
-  
+
   console.log('Final extracted endnotes:', endnotes);
-  
+
   // Sort by index
   return endnotes.sort((a, b) => parseInt(a.index) - parseInt(b.index));
 };
@@ -151,13 +151,13 @@ export const extractEndnotesFromHtml = (htmlContent) => {
 export function getEndNotesHtml(endnotes) {
   // Handle both array format and HTML extraction
   let notesToRender = [];
-  
+
   if (Array.isArray(endnotes)) {
     notesToRender = endnotes;
   } else if (typeof endnotes === 'string') {
     notesToRender = extractEndnotesFromHtml(endnotes);
   }
-  
+
   if (notesToRender.length === 0) return '';
 
   return (
@@ -169,7 +169,8 @@ export function getEndNotesHtml(endnotes) {
             <div id={`endnote-${endnote.index}`}>
               <span>
                 <a href={`#endnote-ref-${endnote.index}`}>[{endnote.index}]</a>
-              </span>&nbsp;
+              </span>
+              &nbsp;
               <span>{endnote.value}</span>
             </div>
           </li>

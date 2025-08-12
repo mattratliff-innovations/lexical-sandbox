@@ -12,7 +12,7 @@ import { TablePlugin } from '@lexical/react/LexicalTablePlugin';
 import { OnChangePlugin } from '@lexical/react/LexicalOnChangePlugin';
 import { EditorRefPlugin } from '@lexical/react/LexicalEditorRefPlugin';
 import PropTypes from 'prop-types';
-import TableAlignmentHandler from './TableAlignmentHandler';
+// import TableAlignmentHandler from './TableAlignmentHandler';
 import DefaultHtmlValuePlugin from './DefaultHtmlValuePlugin';
 import ToolbarPlugin from './ToolbarPlugin';
 import { useDataContext } from '../DataContext';
@@ -143,45 +143,22 @@ export default function LexicalEditor({
   }, []);
 
   // Add event listener for endnote click events
-  // useEffect(() => {
-  //   const handleEndnoteModalShow = (event) => {
-  //     const { id, text, value } = event.detail;
-  //     setCurrentEndnote({ 
-  //       getEndnoteId: () => id, 
-  //       getTextContent: () => text, 
-  //       getEndnoteValue: () => value 
-  //     });
-  //     setShowAddEndnoteModal(true);
-  //   };
-
-  //   document.addEventListener('showEndnoteModal', handleEndnoteModalShow);
-  //   return () => {
-  //     document.removeEventListener('showEndnoteModal', handleEndnoteModalShow);
-  //   };
-  // }, []);
-
   useEffect(() => {
-  const handleEndnoteModalShow = (event) => {
-    const { id, text, value } = event.detail;
-    console.log('LexicalEditor - Received showEndnoteModal event:', { id, text, value });
-    
-    // Create a mock endnote node object for the modal
-    const mockEndnoteNode = {
-      getEndnoteId: () => parseInt(id),
-      getTextContent: () => text || '',
-      getEndnoteValue: () => value || ''
+    const handleEndnoteModalShow = (event) => {
+      const { id, text, value } = event.detail;
+      setCurrentEndnote({
+        getEndnoteId: () => id,
+        getTextContent: () => text,
+        getEndnoteValue: () => value,
+      });
+      setShowAddEndnoteModal(true);
     };
-    
-    console.log('LexicalEditor - Setting currentEndnote:', mockEndnoteNode);
-    setCurrentEndnote(mockEndnoteNode);
-    setShowAddEndnoteModal(true);
-  };
 
-  document.addEventListener('showEndnoteModal', handleEndnoteModalShow);
-  return () => {
-    document.removeEventListener('showEndnoteModal', handleEndnoteModalShow);
-  };
-}, []);
+    document.addEventListener('showEndnoteModal', handleEndnoteModalShow);
+    return () => {
+      document.removeEventListener('showEndnoteModal', handleEndnoteModalShow);
+    };
+  }, []);
 
   // Memoized handlers
   const isTargetInsideOfEditor = useCallback(
@@ -290,14 +267,6 @@ export default function LexicalEditor({
     if (editorRef.current) setEditorReady(true);
   }, [editorRef.current]);
 
-  useEffect(() => {
-  // Initialize endnote manager when draft state changes
-  if (draftState?.endNotes && window.endnoteManager) {
-    console.log('LexicalEditor - Initializing endnote manager with draft state:', draftState.endNotes);
-    window.endnoteManager.initializeFromLetter({ endNotes: draftState.endNotes });
-  }
-}, [draftState?.endNotes]);
-
   // Event Handlers
   const handleUndo = useCallback((undo) => setCanUndo(undo), []);
   const handleRedo = useCallback((redo) => setCanRedo(redo), []);
@@ -367,7 +336,7 @@ export default function LexicalEditor({
               }
             />
 
-            <TableAlignmentHandler />
+            {/* <TableAlignmentHandler /> */}
 
             <TablePlugin />
             {editorReady && <TableActionPlugin />}
@@ -382,8 +351,8 @@ export default function LexicalEditor({
             {false && <TreeViewPlugin />}
 
             <ListPlugin />
-            <EndnotePluginWrapper 
-              handleSetSelectedText={handleSetSelectedText} 
+            <EndnotePluginWrapper
+              handleSetSelectedText={handleSetSelectedText}
               handleSetCanCreateEndnote={handleSetCanCreateEndnote}
               handleSetCurrentEndnote={handleSetCurrentEndnote}
             />
@@ -409,11 +378,7 @@ export default function LexicalEditor({
         )}
 
         <AddContentModal showAddContentModal={showAddContentModal} setShowAddContentModal={setShowAddContentModal} />
-        <AddEndnoteModal 
-          showAddEndnoteModal={showAddEndnoteModal} 
-          setShowAddEndnoteModal={setShowAddEndnoteModal}
-          currentEndnote={currentEndnote}
-        />
+        <AddEndnoteModal showAddEndnoteModal={showAddEndnoteModal} setShowAddEndnoteModal={setShowAddEndnoteModal} currentEndnote={currentEndnote} />
       </LexicalComposer>
     </div>
   );

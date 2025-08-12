@@ -3,7 +3,6 @@ import { $createTextNode, $getSelection, $isRangeSelection, $isTextNode, TextNod
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
 import { useEffect } from 'react';
 import { mergeRegister } from '@lexical/utils';
-import { $createParagraphNode } from 'lexical';
 import './EndnotePlugin.css';
 
 // Global endnote management
@@ -11,17 +10,17 @@ window.endnoteManager = window.endnoteManager || {
   counter: 1,
   endnotes: new Map(),
   initialized: false,
-  
-  initializeFromLetter: function(letterData) {
+
+  initializeFromLetter: function (letterData) {
     this.reset();
     if (letterData && letterData.endNotes && Array.isArray(letterData.endNotes)) {
       let maxId = 0;
-      letterData.endNotes.forEach(endnote => {
+      letterData.endNotes.forEach((endnote) => {
         const id = parseInt(endnote.index);
-        this.endnotes.set(id, { 
-          text: endnote.text || '', 
+        this.endnotes.set(id, {
+          text: endnote.text || '',
           value: endnote.value || '',
-          ref: endnote.ref || `endnote-ref-${id}`
+          ref: endnote.ref || `endnote-ref-${id}`,
         });
         maxId = Math.max(maxId, id);
       });
@@ -30,53 +29,53 @@ window.endnoteManager = window.endnoteManager || {
     this.initialized = true;
     console.log('Endnote manager initialized from letter data:', this.getAllEndnotes());
   },
-  
-  reset: function() {
+
+  reset: function () {
     this.counter = 1;
     this.endnotes.clear();
     this.initialized = false;
     console.log('Endnote manager reset');
   },
-  
-  getNextId: function() {
+
+  getNextId: function () {
     return this.counter++;
   },
-  
-  addEndnote: function(id, text, value, ref) {
-    this.endnotes.set(id, { 
-      text, 
-      value, 
-      ref: ref || `endnote-ref-${id}` 
+
+  addEndnote: function (id, text, value, ref) {
+    this.endnotes.set(id, {
+      text,
+      value,
+      ref: ref || `endnote-ref-${id}`,
     });
     // Update counter to ensure it's always higher than existing IDs
     if (id >= this.counter) {
       this.counter = id + 1;
     }
   },
-  
-  updateEndnote: function(id, value) {
+
+  updateEndnote: function (id, value) {
     const endnote = this.endnotes.get(id);
     if (endnote) {
       endnote.value = value;
     }
   },
-  
-  getAllEndnotes: function() {
+
+  getAllEndnotes: function () {
     const result = [];
     for (const [id, data] of this.endnotes) {
       result.push({
         index: id,
         text: data.text,
         value: data.value,
-        ref: data.ref
+        ref: data.ref,
       });
     }
     return result.sort((a, b) => parseInt(a.index) - parseInt(b.index));
   },
-  
-  removeEndnote: function(id) {
+
+  removeEndnote: function (id) {
     this.endnotes.delete(id);
-  }
+  },
 };
 
 // Custom command for footnote
@@ -93,36 +92,16 @@ export class EndnoteNode extends TextNode {
   }
 
   constructor(text, footnoteId, endnoteValue = '', key) {
-  super(text, key);
-  this.__footnoteId = footnoteId;
-  this.__endnoteValue = endnoteValue;
-  this.__endnoteRef = `endnote-ref-${footnoteId}`;
-  
-  console.log('EndnoteNode - Created:', {
-    footnoteId,
-    text,
-    endnoteValue,
-    ref: this.__endnoteRef
-  });
-  
-  // Register with global endnote manager
-  if (footnoteId && window.endnoteManager) {
-    window.endnoteManager.addEndnote(footnoteId, text, endnoteValue, this.__endnoteRef);
-    console.log('EndnoteNode - Registered with global manager');
-  }
-}
+    super(text, key);
+    this.__footnoteId = footnoteId;
+    this.__endnoteValue = endnoteValue;
+    this.__endnoteRef = `endnote-ref-${footnoteId}`;
 
-  // constructor(text, footnoteId, endnoteValue = '', key) {
-  //   super(text, key);
-  //   this.__footnoteId = footnoteId;
-  //   this.__endnoteValue = endnoteValue;
-  //   this.__endnoteRef = `endnote-ref-${footnoteId}`;
-    
-  //   // Register with global endnote manager
-  //   if (footnoteId && window.endnoteManager) {
-  //     window.endnoteManager.addEndnote(footnoteId, text, endnoteValue, this.__endnoteRef);
-  //   }
-  // }
+    // Register with global endnote manager
+    if (footnoteId && window.endnoteManager) {
+      window.endnoteManager.addEndnote(footnoteId, text, endnoteValue, this.__endnoteRef);
+    }
+  }
 
   getEndnoteId() {
     return this.__footnoteId;
@@ -149,140 +128,30 @@ export class EndnoteNode extends TextNode {
   setEndnoteValue(endnoteValue) {
     const writable = this.getWritable();
     writable.__endnoteValue = endnoteValue;
-    
+
     // Update global endnote manager
     if (window.endnoteManager) {
       window.endnoteManager.updateEndnote(this.__footnoteId, endnoteValue);
     }
   }
 
-  // createDOM(config) {
-  //   const element = super.createDOM(config);
-  //   element.style.padding = '1px 2px';
-    
-  //   // Add anchor ID using the stored endnote reference
-  //   element.id = this.__endnoteRef;
+  createDOM(config) {
+    const element = super.createDOM(config);
+    element.style.padding = '1px 2px';
 
-  //   // Add footnote number indicator
-  //   const footnoteIndicator = document.createElement('sup');
-  //   footnoteIndicator.textContent = `[${this.__footnoteId}]`;
-  //   footnoteIndicator.style.fontSize = '0.65em';
-  //   footnoteIndicator.style.marginLeft = '2px';
-  //   footnoteIndicator.style.color = '#1976d2';
-  //   element.appendChild(footnoteIndicator);
+    // Add anchor ID using the stored endnote reference
+    element.id = this.__endnoteRef;
 
-  //   return element;
-  // }
+    // Add footnote number indicator
+    const footnoteIndicator = document.createElement('sup');
+    footnoteIndicator.textContent = `[${this.__footnoteId}]`;
+    footnoteIndicator.style.fontSize = '0.65em';
+    footnoteIndicator.style.marginLeft = '2px';
+    footnoteIndicator.style.color = '#1976d2';
+    element.appendChild(footnoteIndicator);
 
-//   createDOM(config) {
-//   const element = super.createDOM(config);
-//   element.style.padding = '1px 2px';
-//   element.style.cursor = 'pointer';
-  
-//   // Add anchor ID using the stored endnote reference
-//   element.id = this.__endnoteRef;
-
-//   // Add footnote number indicator
-//   const footnoteIndicator = document.createElement('sup');
-//   footnoteIndicator.textContent = `[${this.__footnoteId}]`;
-//   footnoteIndicator.style.fontSize = '0.65em';
-//   footnoteIndicator.style.marginLeft = '2px';
-//   footnoteIndicator.style.color = '#1976d2';
-//   footnoteIndicator.style.cursor = 'pointer';
-//   element.appendChild(footnoteIndicator);
-
-//   // Add click handler for editing
-//   element.addEventListener('click', (e) => {
-//     e.preventDefault();
-//     e.stopPropagation();
-    
-//     console.log('EndnoteNode - Clicked, dispatching edit event:', {
-//       id: this.__footnoteId,
-//       text: this.__text,
-//       value: this.__endnoteValue
-//     });
-    
-//     // Dispatch custom event to trigger modal
-//     const editEvent = new CustomEvent('showEndnoteModal', {
-//       detail: {
-//         id: this.__footnoteId,
-//         text: this.__text,
-//         value: this.__endnoteValue
-//       }
-//     });
-//     document.dispatchEvent(editEvent);
-//   });
-
-//   return element;
-// }
-
-createDOM(config) {
-  const element = super.createDOM(config);
-  element.style.padding = '1px 2px';
-  element.style.cursor = 'pointer';
-  element.style.backgroundColor = '#e3f2fd'; // Light blue background to make it visible
-  element.style.borderRadius = '2px';
-  element.setAttribute('data-endnote-id', this.__footnoteId);
-  element.setAttribute('data-endnote-text', this.__text);
-  element.setAttribute('data-endnote-value', this.__endnoteValue || '');
-  
-  // Add anchor ID using the stored endnote reference
-  element.id = this.__endnoteRef;
-
-  // Add footnote number indicator
-  const footnoteIndicator = document.createElement('sup');
-  footnoteIndicator.textContent = `[${this.__footnoteId}]`;
-  footnoteIndicator.style.fontSize = '0.65em';
-  footnoteIndicator.style.marginLeft = '2px';
-  footnoteIndicator.style.color = '#1976d2';
-  footnoteIndicator.style.cursor = 'pointer';
-  footnoteIndicator.style.fontWeight = 'bold';
-  element.appendChild(footnoteIndicator);
-
-  // Add click handler for editing
-  const handleClick = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    
-    console.log('EndnoteNode - Clicked endnote:', {
-      id: this.__footnoteId,
-      text: this.__text,
-      value: this.__endnoteValue
-    });
-    
-    // First, set the current endnote in the global state
-    if (window.lexicalEditor) {
-      // Trigger a selection change to update the current endnote
-      window.lexicalEditor.update(() => {
-        // Force a selection update by slightly modifying and restoring selection
-        const selection = $getSelection();
-        if ($isRangeSelection(selection)) {
-          // This will trigger the selection change listeners
-          selection.dirty = true;
-        }
-      });
-    }
-    
-    // Dispatch custom event to trigger modal
-    setTimeout(() => {
-      const editEvent = new CustomEvent('showEndnoteModal', {
-        detail: {
-          id: this.__footnoteId,
-          text: this.__text,
-          value: this.__endnoteValue
-        }
-      });
-      document.dispatchEvent(editEvent);
-    }, 100); // Small delay to ensure selection is processed
-  };
-
-  element.addEventListener('click', handleClick);
-  
-  // Also add click handler to the sup element specifically
-  footnoteIndicator.addEventListener('click', handleClick);
-
-  return element;
-}
+    return element;
+  }
 
   updateDOM(prevNode, dom, config) {
     const updated = super.updateDOM(prevNode, dom, config);
@@ -326,85 +195,29 @@ export function $isEndnoteNode(node) {
 }
 
 // Helper function to get the currently selected endnote node
-// function $getSelectedEndnoteNode(selection) {
-//   if (!$isRangeSelection(selection)) {
-//     return null;
-//   }
-
-//   const nodes = selection.getNodes();
-//   for (const node of nodes) {
-//     if ($isEndnoteNode(node)) {
-//       return node;
-//     }
-//     // Check if cursor is within an endnote node
-//     const parent = node.getParent();
-//     if (parent && $isEndnoteNode(parent)) {
-//       return parent;
-//     }
-//   }
-
-//   // Check if cursor is positioned within an endnote
-//   const anchorNode = selection.anchor.getNode();
-//   if ($isEndnoteNode(anchorNode)) {
-//     return anchorNode;
-//   }
-
-//   return null;
-// }
-
 function $getSelectedEndnoteNode(selection) {
   if (!$isRangeSelection(selection)) {
     return null;
   }
 
   const nodes = selection.getNodes();
-  console.log('EndnotePlugin - Checking selection nodes:', nodes.length);
-  
-  // Check all nodes in the selection
   for (const node of nodes) {
-    console.log('EndnotePlugin - Node type:', node.getType?.(), 'Is endnote:', $isEndnoteNode(node));
-    
     if ($isEndnoteNode(node)) {
-      console.log('EndnotePlugin - Found endnote node directly:', {
-        id: node.getEndnoteId(),
-        text: node.getTextContent(),
-        value: node.getEndnoteValue()
-      });
       return node;
     }
-    
-    // Check parent nodes
-    let parent = node.getParent();
-    while (parent) {
-      if ($isEndnoteNode(parent)) {
-        console.log('EndnotePlugin - Found endnote in parent:', {
-          id: parent.getEndnoteId(),
-          text: parent.getTextContent(),
-          value: parent.getEndnoteValue()
-        });
-        return parent;
-      }
-      parent = parent.getParent();
+    // Check if cursor is within an endnote node
+    const parent = node.getParent();
+    if (parent && $isEndnoteNode(parent)) {
+      return parent;
     }
   }
 
-  // Alternative approach: check if cursor is within an endnote by checking the anchor node
+  // Check if cursor is positioned within an endnote
   const anchorNode = selection.anchor.getNode();
-  console.log('EndnotePlugin - Checking anchor node:', anchorNode.getType?.());
-  
   if ($isEndnoteNode(anchorNode)) {
-    console.log('EndnotePlugin - Anchor is endnote node');
     return anchorNode;
   }
 
-  // Check if anchor's parent is an endnote
-  const anchorParent = anchorNode.getParent();
-  if (anchorParent && $isEndnoteNode(anchorParent)) {
-    console.log('EndnotePlugin - Anchor parent is endnote node');
-    return anchorParent;
-  }
-
-  console.log('EndnotePlugin - No endnote node found in selection');
   return null;
 }
 
@@ -462,51 +275,24 @@ export function useEndnotePlugin(handleSetSelectedText, handleSetCanCreateEndnot
       }, 500);
     };
 
-    // const checkSelection = () => {
-    //   editor.getEditorState().read(() => {
-    //     const selection = $getSelection();
-    //     if ($isRangeSelection(selection)) {
-    //       const selectedText = selection.getTextContent();
-    //       const canCreateEndnote = $isOnWord(selection);
-    //       const currentEndnoteNode = $getSelectedEndnoteNode(selection);
-
-    //       handleSetSelectedText(selectedText);
-    //       handleSetCanCreateEndnote(canCreateEndnote);
-    //       handleSetCurrentEndnote(currentEndnoteNode);
-    //     } else {
-    //       handleSetSelectedText('');
-    //       handleSetCanCreateEndnote(false);
-    //       handleSetCurrentEndnote(null);
-    //     }
-    //   });
-    // };
-
     const checkSelection = () => {
-  editor.getEditorState().read(() => {
-    const selection = $getSelection();
-    if ($isRangeSelection(selection)) {
-      const selectedText = selection.getTextContent();
-      const canCreateEndnote = $isOnWord(selection);
-      const currentEndnoteNode = $getSelectedEndnoteNode(selection);
+      editor.getEditorState().read(() => {
+        const selection = $getSelection();
+        if ($isRangeSelection(selection)) {
+          const selectedText = selection.getTextContent();
+          const canCreateEndnote = $isOnWord(selection);
+          const currentEndnoteNode = $getSelectedEndnoteNode(selection);
 
-      console.log('EndnotePlugin - Selection check:', {
-        selectedText: selectedText.substring(0, 20) + '...',
-        canCreateEndnote,
-        hasCurrentEndnote: !!currentEndnoteNode,
-        currentEndnoteId: currentEndnoteNode?.getEndnoteId?.()
+          handleSetSelectedText(selectedText);
+          handleSetCanCreateEndnote(canCreateEndnote);
+          handleSetCurrentEndnote(currentEndnoteNode);
+        } else {
+          handleSetSelectedText('');
+          handleSetCanCreateEndnote(false);
+          handleSetCurrentEndnote(null);
+        }
       });
-
-      handleSetSelectedText(selectedText);
-      handleSetCanCreateEndnote(canCreateEndnote);
-      handleSetCurrentEndnote(currentEndnoteNode);
-    } else {
-      console.log('EndnotePlugin - No range selection');
-      handleSetSelectedText('');
-      handleSetCanCreateEndnote(false);
-      handleSetCurrentEndnote(null);
-    }
-  });
-};
+    };
 
     const removeUpdateListener = editor.registerUpdateListener(({ editorState }) => {
       editorState.read(() => {
@@ -600,14 +386,14 @@ export function useEndnotePlugin(handleSetSelectedText, handleSetCanCreateEndnot
     const updateEndnote = (footnoteId, newValue) => {
       editor.update(() => {
         const root = $getRoot();
-        
+
         // Recursively search for endnote nodes
         const findAndUpdateEndnote = (node) => {
           if ($isEndnoteNode(node) && node.getEndnoteId() === footnoteId) {
             node.setEndnoteValue(newValue);
             return true;
           }
-          
+
           const children = node.getChildren ? node.getChildren() : [];
           for (const child of children) {
             if (findAndUpdateEndnote(child)) {
@@ -640,100 +426,3 @@ export function useEndnotePlugin(handleSetSelectedText, handleSetCanCreateEndnot
 
   return null;
 }
-
-export const createEndnoteSafely = (editor, endnoteValue = '') => {
-  if (!editor) {
-    console.error('createEndnoteSafely - No editor provided');
-    return false;
-  }
-
-  try {
-    editor.update(() => {
-      const selection = $getSelection();
-
-      if (!$isRangeSelection(selection)) {
-        console.log('createEndnoteSafely - No valid selection, creating placeholder endnote');
-        // Create a placeholder endnote at the end of the content
-        const root = $getRoot();
-        const lastChild = root.getLastChild();
-        
-        if (lastChild) {
-          const footnoteId = window.endnoteManager ? window.endnoteManager.getNextId() : 1;
-          const endnoteNode = $createEndnoteNode('Endnote', footnoteId, endnoteValue);
-          
-          // Append to the last paragraph or create a new one
-          if (lastChild.getType() === 'paragraph') {
-            lastChild.append($createTextNode(' '), endnoteNode);
-          } else {
-            const newParagraph = $createParagraphNode();
-            newParagraph.append(endnoteNode);
-            root.append(newParagraph);
-          }
-        }
-        return true;
-      }
-
-      const selectedText = selection.getTextContent();
-      const footnoteId = window.endnoteManager ? window.endnoteManager.getNextId() : 1;
-
-      if (selectedText.trim() === '') {
-        // Handle word selection at cursor
-        const nodes = selection.getNodes();
-        if (nodes.length > 0 && $isTextNode(nodes[0])) {
-          const textNode = nodes[0];
-          const text = textNode.getTextContent();
-          const { offset } = selection.anchor;
-
-          let start = offset;
-          let end = offset;
-
-          // Find word boundaries
-          while (start > 0 && /\w/.test(text[start - 1])) {
-            start--;
-          }
-          while (end < text.length && /\w/.test(text[end])) {
-            end++;
-          }
-
-          if (start < end) {
-            const wordText = text.substring(start, end);
-            const beforeText = text.substring(0, start);
-            const afterText = text.substring(end);
-
-            const nodes = [];
-            if (beforeText) {
-              nodes.push($createTextNode(beforeText));
-            }
-            nodes.push($createEndnoteNode(wordText, footnoteId, endnoteValue));
-            if (afterText) {
-              nodes.push($createTextNode(afterText));
-            }
-
-            if (nodes.length > 0) {
-              textNode.replace(nodes[0]);
-              for (let i = 1; i < nodes.length; i++) {
-                nodes[i - 1].insertAfter(nodes[i]);
-              }
-            }
-          } else {
-            // No word found, insert a placeholder
-            const endnoteNode = $createEndnoteNode('Endnote', footnoteId, endnoteValue);
-            selection.insertNodes([endnoteNode]);
-          }
-        }
-      } else {
-        // Replace selected text with endnote node
-        const footnoteNode = $createEndnoteNode(selectedText, footnoteId, endnoteValue);
-        selection.insertNodes([footnoteNode]);
-      }
-
-      console.log('createEndnoteSafely - Successfully created endnote with ID:', footnoteId);
-      return true;
-    });
-    
-    return true;
-  } catch (error) {
-    console.error('createEndnoteSafely - Error:', error);
-    return false;
-  }
-};
