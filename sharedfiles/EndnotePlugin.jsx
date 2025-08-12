@@ -135,23 +135,65 @@ export class EndnoteNode extends TextNode {
     }
   }
 
-  createDOM(config) {
-    const element = super.createDOM(config);
-    element.style.padding = '1px 2px';
+  // createDOM(config) {
+  //   const element = super.createDOM(config);
+  //   element.style.padding = '1px 2px';
     
-    // Add anchor ID using the stored endnote reference
-    element.id = this.__endnoteRef;
+  //   // Add anchor ID using the stored endnote reference
+  //   element.id = this.__endnoteRef;
 
-    // Add footnote number indicator
-    const footnoteIndicator = document.createElement('sup');
-    footnoteIndicator.textContent = `[${this.__footnoteId}]`;
-    footnoteIndicator.style.fontSize = '0.65em';
-    footnoteIndicator.style.marginLeft = '2px';
-    footnoteIndicator.style.color = '#1976d2';
-    element.appendChild(footnoteIndicator);
+  //   // Add footnote number indicator
+  //   const footnoteIndicator = document.createElement('sup');
+  //   footnoteIndicator.textContent = `[${this.__footnoteId}]`;
+  //   footnoteIndicator.style.fontSize = '0.65em';
+  //   footnoteIndicator.style.marginLeft = '2px';
+  //   footnoteIndicator.style.color = '#1976d2';
+  //   element.appendChild(footnoteIndicator);
 
-    return element;
-  }
+  //   return element;
+  // }
+
+  createDOM(config) {
+  const element = super.createDOM(config);
+  element.style.padding = '1px 2px';
+  element.style.cursor = 'pointer';
+  
+  // Add anchor ID using the stored endnote reference
+  element.id = this.__endnoteRef;
+
+  // Add footnote number indicator
+  const footnoteIndicator = document.createElement('sup');
+  footnoteIndicator.textContent = `[${this.__footnoteId}]`;
+  footnoteIndicator.style.fontSize = '0.65em';
+  footnoteIndicator.style.marginLeft = '2px';
+  footnoteIndicator.style.color = '#1976d2';
+  footnoteIndicator.style.cursor = 'pointer';
+  element.appendChild(footnoteIndicator);
+
+  // Add click handler for editing
+  element.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    console.log('EndnoteNode - Clicked, dispatching edit event:', {
+      id: this.__footnoteId,
+      text: this.__text,
+      value: this.__endnoteValue
+    });
+    
+    // Dispatch custom event to trigger modal
+    const editEvent = new CustomEvent('showEndnoteModal', {
+      detail: {
+        id: this.__footnoteId,
+        text: this.__text,
+        value: this.__endnoteValue
+      }
+    });
+    document.dispatchEvent(editEvent);
+  });
+
+  return element;
+}
 
   updateDOM(prevNode, dom, config) {
     const updated = super.updateDOM(prevNode, dom, config);

@@ -53,12 +53,25 @@ class Api::Scribe::V1::LettersController < ApplicationController
   end
 
   def update
-    @letter.update!(update_params)
-
-    @letter.validate_for_printing
-
-    render json: @letter
+  @letter.update!(update_params)
+  
+  # Handle endnotes if present
+  if params.dig(:letter, :end_notes).present?
+    @letter.end_notes = params[:letter][:end_notes]
+    @letter.save!
   end
+
+  @letter.validate_for_printing
+  render json: @letter
+end
+
+  # def update
+  #   @letter.update!(update_params)
+
+  #   @letter.validate_for_printing
+
+  #   render json: @letter
+  # end
 
   def show
     @letter.validate_for_printing
@@ -106,18 +119,32 @@ class Api::Scribe::V1::LettersController < ApplicationController
   private
 
   def update_params
-    params.expect(letter: [
-                    :starts_with, :ends_with, :organization_signature_id,
-      :letter_date_override, :letter_type_id, :return_address_override, :row1_col1, :row1_col2,
-      :row2_col1, :row2_col2, :row3_col1, :row3_col2, :header_id,
-      {
-        end_notes: [[:index, :text, :value, :ref]],
-        enclosure_ids: [],
-        sections_attributes: [[:id, :order, :text, :_destroy]],
-        enclosures_attributes: [[:id, :_destroy]]
-      }
-                  ])
-  end
+  params.expect(letter: [
+                  :starts_with, :ends_with, :organization_signature_id,
+    :letter_date_override, :letter_type_id, :return_address_override, :row1_col1, :row1_col2,
+    :row2_col1, :row2_col2, :row3_col1, :row3_col2, :header_id,
+    {
+      end_notes: [], # Add this line
+      enclosure_ids: [],
+      sections_attributes: [[:id, :order, :text, :_destroy]],
+      enclosures_attributes: [[:id, :_destroy]]
+    }
+                ])
+end
+
+  # def update_params
+  #   params.expect(letter: [
+  #                   :starts_with, :ends_with, :organization_signature_id,
+  #     :letter_date_override, :letter_type_id, :return_address_override, :row1_col1, :row1_col2,
+  #     :row2_col1, :row2_col2, :row3_col1, :row3_col2, :header_id,
+  #     {
+  #       end_notes: [[:index, :text, :value, :ref]],
+  #       enclosure_ids: [],
+  #       sections_attributes: [[:id, :order, :text, :_destroy]],
+  #       enclosures_attributes: [[:id, :_destroy]]
+  #     }
+  #                 ])
+  # end
 
   def update_signature_params
     params.expect(letter: [:organization_signature_id])

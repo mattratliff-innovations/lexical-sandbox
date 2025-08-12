@@ -1,274 +1,235 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import PropTypes from 'prop-types';
 import { DrButton } from '@druid/druid';
-import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
 import styled from '@emotion/styled';
-import { INSERT_FOOTNOTE_COMMAND } from './EndnotePlugin';
-import { ScribeModal, XCloseBtn } from '../../../../../components/ScribeComponents';
-import { H1 } from '../../../../../components/typography';
-import { HeaderContainer, Body, Footer } from '../../../../util/modalDesignComponents';
-import { HrNoTopMargin } from '../../../../../components/designedComponents';
+import { useDataContext } from '../DataContext';
+import { ScribeModal, XCloseBtn } from '../../../../components/ScribeComponents';
+import { H1 } from '../../../../components/typography';
+import { HeaderContainer, Body, Footer } from '../../../util/modalDesignComponents';
+import { INSERT_FOOTNOTE_COMMAND } from '../EndnotePlugin';
 
-const BtnContainer = styled.div`
-  display: flex;
-  gap: 24px;
-`;
-
-const TextArea = styled.textarea`
+const StyledTextArea = styled.textarea`
   width: 100%;
-  min-height: 120px;
+  min-height: 100px;
   padding: 8px;
   border: 1px solid #ccc;
   border-radius: 4px;
   font-family: inherit;
   font-size: 14px;
   resize: vertical;
-
-  &:focus {
-    outline: none;
-    border-color: #007bff;
-    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
-  }
 `;
 
-const Label = styled.label`
-  display: block;
-  margin-bottom: 8px;
-  font-weight: 500;
-  color: #333;
+const BtnContainer = styled.div`
+  display: flex;
+  gap: 24px;
 `;
 
-const WordDisplay = styled.div`
-  background-color: #f8f9fa;
-  border: 1px solid #dee2e6;
-  border-radius: 4px;
-  padding: 8px 12px;
-  margin-bottom: 16px;
-  font-family: monospace;
-  font-size: 14px;
-`;
+export default function AddEndnoteModal({ 
+  showAddEndnoteModal, 
+  setShowAddEndnoteModal,
+  currentEndnote = null
+}) {
+  const { draftState, setDraftState } = useDataContext();
+  const [endnoteText, setEndnoteText] = useState('');
 
-const WordLabel = styled.div`
-  font-size: 12px;
-  color: #6c757d;
-  margin-bottom: 4px;
-`;
-
-export default function AddEndnoteModal({ showAddEndnoteModal, setShowAddEndnoteModal, currentEndnote = null }) {
-  const [editor] = useLexicalComposerContext();
-  const [endnoteValue, setEndnoteValue] = useState('');
-  const [selectedWord, setSelectedWord] = useState('');
-
-  // Effect to populate modal when opened
-  useEffect(() => {
-    console.log('AddEndnoteModal useEffect triggered - showModal:', showAddEndnoteModal);
-    console.log('AddEndnoteModal - currentEndnote prop:', currentEndnote);
-    console.log('AddEndnoteModal - window.currentEndnoteContext:', window.currentEndnoteContext);
-    console.log('AddEndnoteModal - window.globalEndNotes:', window.globalEndNotes);
+  // Get current endnotes from draft state or global manager
+  const endnotes = useMemo(() => {
+    // First try global endnote manager
+    if (window.endnoteManager && window.endnoteManager.initialized) {
+      const globalEndnotes = window.endnoteManager.getAllEndnotes();
+      console.log('AddEndnoteModal - Using global endnote manager:', globalEndnotes);
+      return globalEndnotes;
+    }
     
-    if (showAddEndnoteModal) {
-      // Use currentEndnote prop first, then check global context
-      let endnoteToEdit = currentEndnote || window.currentEndnoteContext;
-      
-      // If we still don't have an endnote to edit, try one more detection attempt
-      if (!endnoteToEdit && editor && window.globalEndNotes && window.globalEndNotes.length > 0) {
-        console.log('AddEndnoteModal - Attempting fallback endnote detection');
-        
-        editor.getEditorState().read(() => {
-          const selection = editor.getEditorState()._selection;
-          if (selection && selection.getNodes) {
-            const nodes = selection.getNodes();
-            
-            if (nodes.length > 0) {
-              const node = nodes[0];
-              const allTextContent = [];
-              
-              // Collect all possible text sources
-              if (node.getTextContent) {
-                allTextContent.push(node.getTextContent());
-              }
-              
-              if (selection.getTextContent) {
-                allTextContent.push(selection.getTextContent());
-              }
-              
-              // Try parent content
-              if (node.getParent && node.getParent().getTextContent) {
-                allTextContent.push(node.getParent().getTextContent());
-              }
-              
-              console.log('AddEndnoteModal - Fallback text sources:', allTextContent);
-              
-              // Search through all endnotes for any matches
-              for (const endnote of window.globalEndNotes) {
-                for (const textSource of allTextContent) {
-                  if (textSource && (
-                    textSource.includes(endnote.text) ||
-                    endnote.text.includes(textSource) ||
-                    textSource.toLowerCase().includes(endnote.text.toLowerCase()) ||
-                    endnote.text.toLowerCase().includes(textSource.toLowerCase())
-                  )) {
-                    console.log('AddEndnoteModal - Fallback found match:', endnote, 'with text:', textSource);
-                    endnoteToEdit = {
-                      __footnoteId: endnote.index,
-                      __text: endnote.text,
-                      __endnoteValue: endnote.value,
-                      text: endnote.text,
-                      value: endnote.value,
-                      index: endnote.index,
-                      getEndnoteId: () => endnote.index,
-                      getTextContent: () => endnote.text,
-                      getEndnoteValue: () => endnote.value
-                    };
-                    
-                    // Update the global context too
-                    window.currentEndnoteContext = endnoteToEdit;
-                    break;
-                  }
-                }
-                
-                if (endnoteToEdit) break;
-              }
-            }
-          }
-        });
-      }
-      
-      console.log('AddEndnoteModal - Final endnoteToEdit:', endnoteToEdit);
-      
-      if (endnoteToEdit) {
-        // Editing existing endnote - get data from the endnote object
-        const endnoteText =
-          endnoteToEdit.__text ||
-          (typeof endnoteToEdit.getTextContent === 'function' ? endnoteToEdit.getTextContent() : '') ||
-          endnoteToEdit.text ||
-          '';
-        const endnoteValueData =
-          endnoteToEdit.__endnoteValue ||
-          (typeof endnoteToEdit.getEndnoteValue === 'function' ? endnoteToEdit.getEndnoteValue() : '') ||
-          endnoteToEdit.value ||
-          '';
-
-        console.log('AddEndnoteModal - extracted text:', endnoteText);
-        console.log('AddEndnoteModal - extracted value:', endnoteValueData);
-
-        setSelectedWord(endnoteText);
-        setEndnoteValue(endnoteValueData);
-      } else {
-        // Creating new endnote - get selected text from editor
-        console.log('AddEndnoteModal - creating new endnote');
-        if (editor) {
-          editor.getEditorState().read(() => {
-            const selection = editor.getEditorState()._selection;
-            if (selection) {
-              const selectedText = selection.getTextContent();
-              console.log('AddEndnoteModal - selected text from editor:', selectedText);
-              setSelectedWord(selectedText || '');
-            }
-          });
-        }
-        setEndnoteValue('');
-      }
+    // Fallback to draft state
+    if (draftState?.endNotes && Array.isArray(draftState.endNotes)) {
+      console.log('AddEndnoteModal - Using draft state endnotes:', draftState.endNotes);
+      return draftState.endNotes;
     }
-  }, [showAddEndnoteModal, currentEndnote, editor]);
+    
+    console.log('AddEndnoteModal - No endnotes found, using empty array');
+    return [];
+  }, [draftState?.endNotes]);
 
-  // Clear form when modal closes
+  // Determine if we're editing an existing endnote
+  const isEditing = currentEndnote !== null;
+  const endnoteId = currentEndnote?.getEndnoteId ? currentEndnote.getEndnoteId() : null;
+
+  // Find the endnote being edited
+  const endnoteToEdit = useMemo(() => {
+    if (!isEditing || !endnoteId) {
+      console.log('AddEndnoteModal - Not editing, no endnote to find');
+      return null;
+    }
+
+    console.log('AddEndnoteModal - Looking for endnote with ID:', endnoteId);
+    console.log('AddEndnoteModal - Available endnotes:', endnotes);
+
+    // Try to find by exact ID match
+    const foundEndnote = endnotes.find(note => {
+      const noteId = note.index || note.id;
+      return String(noteId) === String(endnoteId);
+    });
+
+    if (foundEndnote) {
+      console.log('AddEndnoteModal - Found endnote:', foundEndnote);
+      return foundEndnote;
+    }
+
+    // If we have a currentEndnote object, try to get value from it directly
+    if (currentEndnote?.getEndnoteValue) {
+      const directValue = currentEndnote.getEndnoteValue();
+      console.log('AddEndnoteModal - Using direct value from currentEndnote:', directValue);
+      return {
+        index: endnoteId,
+        value: directValue,
+        text: currentEndnote.getTextContent ? currentEndnote.getTextContent() : ''
+      };
+    }
+
+    console.log('AddEndnoteModal - No endnote found for editing');
+    return null;
+  }, [isEditing, endnoteId, endnotes, currentEndnote]);
+
+  // Initialize form when modal opens
   useEffect(() => {
-    if (!showAddEndnoteModal) {
-      setEndnoteValue('');
-      setSelectedWord('');
-      // Clear global context
-      window.currentEndnoteContext = null;
+    console.log('AddEndnoteModal - Modal state changed:', {
+      showAddEndnoteModal,
+      isEditing,
+      endnoteToEdit,
+      currentEndnote
+    });
+
+    if (showAddEndnoteModal) {
+      if (isEditing && endnoteToEdit) {
+        console.log('AddEndnoteModal - Setting text for editing:', endnoteToEdit.value);
+        setEndnoteText(endnoteToEdit.value || '');
+      } else {
+        console.log('AddEndnoteModal - Clearing text for new endnote');
+        setEndnoteText('');
+      }
     }
-  }, [showAddEndnoteModal]);
+  }, [showAddEndnoteModal, isEditing, endnoteToEdit]);
+
+  const handleClose = () => {
+    setEndnoteText('');
+    setShowAddEndnoteModal(false);
+  };
 
   const handleSubmit = () => {
-    const endnoteToUpdate = currentEndnote || window.currentEndnoteContext;
+    const trimmedText = endnoteText.trim();
     
-    if (endnoteToUpdate && (endnoteToUpdate.__footnoteId || typeof endnoteToUpdate.getEndnoteId === 'function')) {
+    if (!trimmedText) {
+      console.log('AddEndnoteModal - No text provided, not submitting');
+      return;
+    }
+
+    console.log('AddEndnoteModal - Submitting endnote:', {
+      isEditing,
+      endnoteId,
+      text: trimmedText
+    });
+
+    if (isEditing && endnoteId) {
       // Update existing endnote
-      const endnoteId = endnoteToUpdate.__footnoteId || endnoteToUpdate.getEndnoteId();
+      console.log('AddEndnoteModal - Updating existing endnote');
       
-      console.log('AddEndnoteModal - Updating endnote ID:', endnoteId, 'with value:', endnoteValue);
-      
-      // Update the global endnotes array
-      if (window.globalEndNotes && window.globalEndNotes.length > 0) {
-        const updatedEndNotes = window.globalEndNotes.map(note => 
-          note.index === endnoteId 
-            ? { ...note, value: endnoteValue, text: selectedWord }
+      // Update in global endnote manager
+      if (window.endnoteManager) {
+        window.endnoteManager.updateEndnote(parseInt(endnoteId), trimmedText);
+        console.log('AddEndnoteModal - Updated in global manager');
+      }
+
+      // Update in Lexical editor if available
+      if (window.updateEndnote) {
+        window.updateEndnote(parseInt(endnoteId), trimmedText);
+        console.log('AddEndnoteModal - Updated in Lexical editor');
+      }
+
+      // Update draft state
+      setDraftState(currentDraftState => {
+        const updatedEndNotes = (currentDraftState.endNotes || []).map(note => 
+          String(note.index) === String(endnoteId) 
+            ? { ...note, value: trimmedText }
             : note
         );
         
-        console.log('AddEndnoteModal - Updated endnotes:', updatedEndNotes);
-        
-        // Update global state
-        window.globalEndNotes = updatedEndNotes;
-        
-        // Update draft state if available
-        if (window.updateDraftEndNotes) {
-          window.updateDraftEndNotes(updatedEndNotes);
-        }
-        
-        // Also try to update window.draftState directly
-        if (window.draftState) {
-          window.draftState.endNotes = updatedEndNotes;
-        }
-      }
+        console.log('AddEndnoteModal - Updated draft state endnotes:', updatedEndNotes);
+        return { ...currentDraftState, endNotes: updatedEndNotes };
+      });
+      
     } else {
       // Create new endnote
-      console.log('AddEndnoteModal - Creating new endnote with value:', endnoteValue);
-      editor.dispatchCommand(INSERT_FOOTNOTE_COMMAND, endnoteValue);
+      console.log('AddEndnoteModal - Creating new endnote');
+      
+      // Dispatch command to create new endnote in the editor
+      if (window.lexicalEditor) {
+        try {
+          window.lexicalEditor.dispatchCommand(INSERT_FOOTNOTE_COMMAND, trimmedText);
+          console.log('AddEndnoteModal - Dispatched INSERT_FOOTNOTE_COMMAND');
+        } catch (error) {
+          console.error('AddEndnoteModal - Error dispatching command:', error);
+        }
+      }
     }
 
-    setShowAddEndnoteModal(false);
+    handleClose();
   };
 
-  const handleCancel = () => {
-    setShowAddEndnoteModal(false);
-  };
-
-  const isEditing = !!(currentEndnote || window.currentEndnoteContext);
+  const modalTitle = isEditing ? 'Edit Endnote' : 'Add Endnote';
+  const submitText = isEditing ? 'Update' : 'Add';
 
   return (
     <ScribeModal showModal={showAddEndnoteModal} width="md">
-      <HeaderContainer data-testid="endnote-modal">
-        <H1 className="noMarginEndnote">{isEditing ? 'Edit Endnote' : 'Add Endnote'}</H1>
-        <XCloseBtn handleClose={handleCancel} />
+      <HeaderContainer data-testid="addEndnoteModal">
+        <H1 className="noMargin">{modalTitle}</H1>
+        <XCloseBtn handleClose={handleClose} />
       </HeaderContainer>
 
       <Body className="mb-4">
-        <div className="col-sm-8">
-          <HrNoTopMargin />
-        </div>
-
         <div className="row m-0 mt-4">
           <div className="col-lg-12">
-            {selectedWord && (
-              <>
-                <WordLabel>{isEditing ? 'Associated Word/Phrase:' : 'Selected Word/Phrase:'}</WordLabel>
-                <WordDisplay>"{selectedWord}"</WordDisplay>
-              </>
+            {isEditing && endnoteToEdit && (
+              <div className="mb-3">
+                <strong>Reference Text:</strong> {endnoteToEdit.text || currentEndnote?.getTextContent?.() || 'N/A'}
+              </div>
             )}
-
-            <Label htmlFor="endnote-text">Endnote Text:</Label>
-            <TextArea
-              id="endnote-text"
-              value={endnoteValue}
-              onChange={(e) => setEndnoteValue(e.target.value)}
-              placeholder="Enter your endnote text here..."
-              data-testid="endnote-textarea"
-            />
+            
+            <div className="mb-3">
+              <label htmlFor="endnoteText">
+                <strong>Endnote Text:</strong>
+              </label>
+              <StyledTextArea
+                id="endnoteText"
+                value={endnoteText}
+                onChange={(e) => setEndnoteText(e.target.value)}
+                placeholder="Enter the endnote text..."
+                rows={4}
+                data-testid="endnoteTextArea"
+              />
+            </div>
           </div>
         </div>
       </Body>
 
       <Footer>
         <BtnContainer>
-          <DrButton variant="primary" data-testid="saveEndnoteButton" className="btn-size" onClick={handleSubmit} disabled={!endnoteValue.trim()}>
-            {isEditing ? 'Update' : 'Add'}
+          <DrButton 
+            variant="primary" 
+            data-testid="submitEndnoteButton" 
+            className="btn-size" 
+            onClick={handleSubmit}
+            disabled={!endnoteText.trim()}
+          >
+            {submitText}
           </DrButton>
 
-          <DrButton variant="secondary" data-testid="cancelEndnoteButton" onClick={handleCancel} className="btn-size">
+          <DrButton 
+            variant="secondary" 
+            data-testid="cancelEndnoteButton" 
+            onClick={handleClose} 
+            className="btn-size"
+          >
             Cancel
           </DrButton>
         </BtnContainer>
@@ -282,9 +243,7 @@ AddEndnoteModal.propTypes = {
   setShowAddEndnoteModal: PropTypes.func.isRequired,
   currentEndnote: PropTypes.shape({
     getEndnoteId: PropTypes.func,
-    getTextContent: PropTypes.func,
     getEndnoteValue: PropTypes.func,
-    text: PropTypes.string,
-    value: PropTypes.string,
+    getTextContent: PropTypes.func,
   }),
 };

@@ -267,6 +267,14 @@ export default function LexicalEditor({
     if (editorRef.current) setEditorReady(true);
   }, [editorRef.current]);
 
+  useEffect(() => {
+  // Initialize endnote manager when draft state changes
+  if (draftState?.endNotes && window.endnoteManager) {
+    console.log('LexicalEditor - Initializing endnote manager with draft state:', draftState.endNotes);
+    window.endnoteManager.initializeFromLetter({ endNotes: draftState.endNotes });
+  }
+}, [draftState?.endNotes]);
+
   // Event Handlers
   const handleUndo = useCallback((undo) => setCanUndo(undo), []);
   const handleRedo = useCallback((redo) => setCanRedo(redo), []);

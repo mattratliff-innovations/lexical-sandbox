@@ -317,6 +317,14 @@ export default function Letter() {
     if (curHeight !== letterHeight) setLetterHeight(curHeight);
   });
 
+  useEffect(() => {
+  // Initialize endnote manager when draft is loaded
+  if (draft?.endNotes && window.endnoteManager) {
+    console.log('Letter - Initializing endnote manager with draft:', draft.endNotes);
+    window.endnoteManager.initializeFromLetter(draft);
+  }
+}, [draft?.endNotes]);
+
   // Create editor configuration
   const scribeEditorConfig = {
     showDocumentHeader: draft?.letterType?.headerIncluded ?? true,

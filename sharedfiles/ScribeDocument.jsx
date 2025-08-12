@@ -162,47 +162,94 @@ const ScribeDocument = forwardRef(
     };
 
     const letterDraftData = () => {
-      const formattedSections = draftState.sections.map((section, i) => {
-        const sectionValue = section._destroy ? null : exportLexicalHtml(editorsRef.current[section.frontEndId]);
+  const formattedSections = draftState.sections.map((section, i) => {
+    const sectionValue = section._destroy ? null : exportLexicalHtml(editorsRef.current[section.frontEndId]);
 
-        const sectionAttributes = {
-          id: section.id,
-          text: sectionValue,
-          order: i,
-        };
-        return {
-          ...sectionAttributes,
-          ...(section._destroy && { _destroy: section._destroy }),
-        };
-      });
-
-      // Extract endnotes for storage - use global manager if available
-      const allEndnotes = window.endnoteManager ? window.endnoteManager.getAllEndnotes() : extractAllEndnotes();
-
-      const draftData = {
-        sectionsAttributes: formattedSections,
-        startsWith: exportLexicalHtml(editorsRef.current['starts-with-editor']),
-        endsWith: exportLexicalHtml(editorsRef.current['ends-with-editor']),
-        endNotes: allEndnotes, // Add endnotes to draft data
-      };
-
-      if (showDocumentHeader) {
-        const hydratedHeaders = HEADER_ROW_COL_LIST.reduce(
-          (resultMap, rowCol) => ({
-            ...resultMap,
-            [rowCol]: hydrateVariablesHeadlessly(draft[rowCol], draft),
-          }),
-          {}
-        );
-
-        return {
-          ...hydratedHeaders,
-          ...draftData,
-        };
-      }
-
-      return draftData;
+    const sectionAttributes = {
+      id: section.id,
+      text: sectionValue,
+      order: i,
     };
+    return {
+      ...sectionAttributes,
+      ...(section._destroy && { _destroy: section._destroy }),
+    };
+  });
+
+  // Get endnotes from global manager if available, otherwise extract from editors
+  const allEndnotes = window.endnoteManager && window.endnoteManager.initialized 
+    ? window.endnoteManager.getAllEndnotes() 
+    : extractAllEndnotes();
+
+  console.log('ScribeDocument - letterDraftData endnotes:', allEndnotes);
+
+  const draftData = {
+    sectionsAttributes: formattedSections,
+    startsWith: exportLexicalHtml(editorsRef.current['starts-with-editor']),
+    endsWith: exportLexicalHtml(editorsRef.current['ends-with-editor']),
+    end_notes: allEndnotes, // Use snake_case to match backend expectations
+  };
+
+  if (showDocumentHeader) {
+    const hydratedHeaders = HEADER_ROW_COL_LIST.reduce(
+      (resultMap, rowCol) => ({
+        ...resultMap,
+        [rowCol]: hydrateVariablesHeadlessly(draft[rowCol], draft),
+      }),
+      {}
+    );
+
+    return {
+      ...hydratedHeaders,
+      ...draftData,
+    };
+  }
+
+  return draftData;
+};
+
+    // const letterDraftData = () => {
+    //   const formattedSections = draftState.sections.map((section, i) => {
+    //     const sectionValue = section._destroy ? null : exportLexicalHtml(editorsRef.current[section.frontEndId]);
+
+    //     const sectionAttributes = {
+    //       id: section.id,
+    //       text: sectionValue,
+    //       order: i,
+    //     };
+    //     return {
+    //       ...sectionAttributes,
+    //       ...(section._destroy && { _destroy: section._destroy }),
+    //     };
+    //   });
+
+    //   // Extract endnotes for storage - use global manager if available
+    //   const allEndnotes = window.endnoteManager ? window.endnoteManager.getAllEndnotes() : extractAllEndnotes();
+
+    //   const draftData = {
+    //     sectionsAttributes: formattedSections,
+    //     startsWith: exportLexicalHtml(editorsRef.current['starts-with-editor']),
+    //     endsWith: exportLexicalHtml(editorsRef.current['ends-with-editor']),
+    //     endNotes: allEndnotes, // Add endnotes to draft data
+    //   };
+
+    //   if (showDocumentHeader) {
+    //     const hydratedHeaders = HEADER_ROW_COL_LIST.reduce(
+    //       (resultMap, rowCol) => ({
+    //         ...resultMap,
+    //         [rowCol]: hydrateVariablesHeadlessly(draft[rowCol], draft),
+    //       }),
+    //       {}
+    //     );
+
+    //     return {
+    //       ...hydratedHeaders,
+    //       ...draftData,
+    //     };
+    //   }
+
+    //   return draftData;
+    // };
 
     useImperativeHandle(ref, () => ({
       letterHtml,
