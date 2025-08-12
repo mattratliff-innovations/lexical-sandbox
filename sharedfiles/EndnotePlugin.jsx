@@ -389,68 +389,10 @@ export function useEndnotePlugin(handleSetSelectedText, handleSetCanCreateEndnot
       });
     };
 
-    // Function to handle click events on text-based endnotes
-    const handleEditorClick = (event) => {
-      const target = event.target;
-      if (target && target.textContent) {
-        const text = target.textContent;
-        const clickPosition = getClickPositionInText(target, event);
-        
-        // Check if click is within an endnote pattern
-        const endnoteRegex = /(.+?)\[(\d+)\]/g;
-        let match;
-        
-        while ((match = endnoteRegex.exec(text)) !== null) {
-          const matchStart = match.index;
-          const matchEnd = match.index + match[0].length;
-          
-          if (clickPosition >= matchStart && clickPosition <= matchEnd) {
-            const [fullMatch, endnoteText, footnoteId] = match;
-            const id = parseInt(footnoteId);
-            
-            console.log(`Clicked on endnote: "${endnoteText.trim()}" [${id}]`);
-            
-            // Get endnote value from manager
-            const endnoteValue = window.endnoteManager?.endnotes.get(id)?.value || '';
-            
-            // Dispatch custom event to show modal
-            const customEvent = new CustomEvent('showEndnoteModal', {
-              detail: {
-                id,
-                text: endnoteText.trim(),
-                value: endnoteValue
-              }
-            });
-            document.dispatchEvent(customEvent);
-            
-            event.preventDefault();
-            event.stopPropagation();
-            break;
-          }
-        }
-      }
-    };
-
-    // Helper function to get click position within text
-    const getClickPositionInText = (element, event) => {
-      // This is a simplified approach - in practice, you might need more sophisticated positioning
-      const rect = element.getBoundingClientRect();
-      const clickX = event.clientX - rect.left;
-      const text = element.textContent;
-      const charWidth = rect.width / text.length; // Approximate character width
-      return Math.floor(clickX / charWidth);
-    };
-
     // Parse existing endnotes when the plugin initializes
     const timeoutId = setTimeout(() => {
       parseExistingEndnotes();
     }, 100); // Small delay to ensure content is loaded
-
-    // Add click listener to editor
-    const editorElement = editor.getRootElement();
-    if (editorElement) {
-      editorElement.addEventListener('click', handleEditorClick);
-    }
 
     const checkForSelectedText = () => {
       editor.update(() => {
@@ -490,11 +432,6 @@ export function useEndnotePlugin(handleSetSelectedText, handleSetCanCreateEndnot
     return () => {
       clearTimeout(timeoutId);
       removeUpdateListener();
-      
-      // Remove click listener
-      if (editorElement) {
-        editorElement.removeEventListener('click', handleEditorClick);
-      }
     };
   }, [editor, handleSetSelectedText, handleSetCanCreateEndnote, handleSetCurrentEndnote]);
 
