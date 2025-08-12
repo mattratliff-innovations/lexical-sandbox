@@ -138,6 +138,9 @@ export class EndnoteNode extends TextNode {
   createDOM(config) {
     const element = super.createDOM(config);
     element.style.padding = '1px 2px';
+    element.style.cursor = 'pointer';
+    element.style.backgroundColor = 'rgba(25, 118, 210, 0.1)';
+    element.style.borderRadius = '2px';
 
     // Add anchor ID using the stored endnote reference
     element.id = this.__endnoteRef;
@@ -148,6 +151,7 @@ export class EndnoteNode extends TextNode {
     footnoteIndicator.style.fontSize = '0.65em';
     footnoteIndicator.style.marginLeft = '2px';
     footnoteIndicator.style.color = '#1976d2';
+    footnoteIndicator.style.pointerEvents = 'none'; // Prevent interference with click detection
     element.appendChild(footnoteIndicator);
 
     return element;
@@ -203,12 +207,10 @@ function $getSelectedEndnoteNode(selection) {
   const nodes = selection.getNodes();
   console.log('EndnotePlugin - Checking selection nodes:', nodes.length);
   
-  // First check if any selected nodes are endnote nodes
+  // First check if any selected nodes are already endnote nodes
   for (const node of nodes) {
-    console.log('EndnotePlugin - Node type:', node.getType?.(), 'Is endnote:', $isEndnoteNode(node));
-    
     if ($isEndnoteNode(node)) {
-      console.log('EndnotePlugin - Found endnote node directly:', {
+      console.log('EndnotePlugin - Found existing endnote node:', {
         id: node.getEndnoteId(),
         text: node.getTextContent(),
         value: node.getEndnoteValue()
@@ -220,11 +222,7 @@ function $getSelectedEndnoteNode(selection) {
     let parent = node.getParent();
     while (parent) {
       if ($isEndnoteNode(parent)) {
-        console.log('EndnotePlugin - Found endnote in parent:', {
-          id: parent.getEndnoteId(),
-          text: parent.getTextContent(),
-          value: parent.getEndnoteValue()
-        });
+        console.log('EndnotePlugin - Found endnote in parent');
         return parent;
       }
       parent = parent.getParent();
@@ -233,48 +231,57 @@ function $getSelectedEndnoteNode(selection) {
 
   // Check anchor node
   const anchorNode = selection.anchor.getNode();
-  console.log('EndnotePlugin - Checking anchor node:', anchorNode.getType?.());
-  
   if ($isEndnoteNode(anchorNode)) {
-    console.log('EndnotePlugin - Anchor is endnote node');
     return anchorNode;
   }
 
-  // Check if we're clicking on text that looks like an endnote
-  if (anchorNode.getType?.() === 'extended-text') {
+  // Only check for text patterns if we're specifically looking for endnotes
+  // and not during regular text selection
+  const selectedText = selection.getTextContent();
+  if (selectedText.trim() === '' && anchorNode.getType?.() === 'extended-text') {
     const text = anchorNode.getTextContent();
     const endnotePattern = /([^[]*)\[(\d+)\]/;
     const match = text.match(endnotePattern);
     
     if (match) {
-      console.log('EndnotePlugin - Found endnote pattern in text:', match);
       const [_, beforeText, endnoteId] = match;
       
-      // Check if we have this endnote in our global manager
+      // Only convert if we have the endnote data and the cursor is near the bracket
       if (window.endnoteManager) {
         const allEndnotes = window.endnoteManager.getAllEndnotes();
         const endnoteData = allEndnotes.find(e => String(e.index) === endnoteId);
         
         if (endnoteData) {
-          console.log('EndnotePlugin - Converting text back to endnote node');
+          // Check if cursor position is near the endnote reference
+          const { offset } = selection.anchor;
+          const bracketIndex = text.indexOf(`[${endnoteId}]`);
           
-          // Convert this text node back to an endnote node
-          editor.update(() => {
-            const endnoteNode = $createEndnoteNode(beforeText, parseInt(endnoteId), endnoteData.value);
-            anchorNode.replace(endnoteNode);
-          });
-          
-          return {
-            getEndnoteId: () => parseInt(endnoteId),
-            getTextContent: () => beforeText,
-            getEndnoteValue: () => endnoteData.value || ''
-          };
+          // Only convert if cursor is within reasonable distance of the bracket
+          if (Math.abs(offset - bracketIndex) <= beforeText.length + 3) {
+            console.log('EndnotePlugin - Converting text to endnote node (cursor near bracket)');
+            
+            // Don't update immediately, defer to avoid interfering with focus
+            setTimeout(() => {
+              if (window.lexicalEditor) {
+                window.lexicalEditor.update(() => {
+                  const endnoteNode = $createEndnoteNode(beforeText, parseInt(endnoteId), endnoteData.value);
+                  anchorNode.replace(endnoteNode);
+                });
+              }
+            }, 100);
+            
+            // Return a temporary endnote representation
+            return {
+              getEndnoteId: () => parseInt(endnoteId),
+              getTextContent: () => beforeText,
+              getEndnoteValue: () => endnoteData.value || ''
+            };
+          }
         }
       }
     }
   }
 
-  console.log('EndnotePlugin - No endnote node found in selection');
   return null;
 }
 
@@ -480,6 +487,53 @@ export function useEndnotePlugin(handleSetSelectedText, handleSetCanCreateEndnot
 
     return removeListeners;
   }, [editor]);
+
+  // Add click handler for endnote detection
+  useEffect(() => {
+    if (!editor) return;
+
+    const handleEditorClick = (event) => {
+      // Check if clicked element or its parent contains endnote pattern
+      let target = event.target;
+      
+      // Look up the DOM tree for text content
+      while (target && target !== editor.getRootElement()) {
+        const textContent = target.textContent || '';
+        const endnotePattern = /([^[]*)\[(\d+)\]/;
+        const match = textContent.match(endnotePattern);
+        
+        if (match) {
+          console.log('EndnotePlugin - Click detected on potential endnote text');
+          
+          // Don't prevent propagation as it might interfere with focus management
+          
+          // Trigger endnote detection with a delay
+          setTimeout(() => {
+            editor.update(() => {
+              const selection = $getSelection();
+              if ($isRangeSelection(selection)) {
+                const currentEndnoteNode = $getSelectedEndnoteNode(selection);
+                handleSetCurrentEndnote(currentEndnoteNode);
+              }
+            });
+          }, 50);
+          
+          break;
+        }
+        
+        target = target.parentElement;
+      }
+    };
+
+    const rootElement = editor.getRootElement();
+    if (rootElement) {
+      rootElement.addEventListener('click', handleEditorClick);
+      
+      return () => {
+        rootElement.removeEventListener('click', handleEditorClick);
+      };
+    }
+  }, [editor, handleSetCurrentEndnote]);
 
   return null;
 }

@@ -195,15 +195,20 @@ export default function ToolbarPlugin({
     });
   };
 
-  const handleEndnoteAction = () => {
-    if (currentEndnote) {
-      // If we're on an existing endnote, show the modal to edit it
-      setShowAddEndnoteModal(true);
-    } else if (canCreateEndnote) {
-      // If we can create a new endnote, show the modal to create it
-      setShowAddEndnoteModal(true);
-    }
-  };
+const handleEndnoteAction = () => {
+  console.log('ToolbarPlugin - handleEndnoteAction called:', { currentEndnote, canCreateEndnote });
+  
+  // Ensure toolbar stays open when opening endnote modal
+  if (currentEndnote) {
+    console.log('ToolbarPlugin - Opening modal for existing endnote');
+    setShowAddEndnoteModal(true);
+  } else if (canCreateEndnote) {
+    console.log('ToolbarPlugin - Opening modal for new endnote');
+    setShowAddEndnoteModal(true);
+  } else {
+    console.log('ToolbarPlugin - Cannot create or edit endnote');
+  }
+};
 
   const alignBtns = {
     alignleft: {

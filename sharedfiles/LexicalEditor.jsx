@@ -161,22 +161,24 @@ export default function LexicalEditor({
   }, []);
 
   // Memoized handlers
-  const isTargetInsideOfEditor = useCallback(
-    (target) => {
-      if (!containerRef.current) return false;
+const isTargetInsideOfEditor = useCallback(
+  (target) => {
+    if (!containerRef.current) return false;
 
-      const lexicalParentId = containerRef.current.getAttribute('id');
-      return (
-        containerRef.current.contains(target) ||
-        target?.closest(`[${PARENT_LEXICAL_ID_ATTRIBUTE}="${CONTENT_EDITABLE_PREFIX + lexicalParentId}"]`) ||
-        showAddEndnoteModal ||
-        showAddContentModal ||
-        alignMenuAnchor ||
-        tableCreatorAnchor
-      );
-    },
-    [showAddEndnoteModal, showAddContentModal, alignMenuAnchor, tableCreatorAnchor]
-  );
+    const lexicalParentId = containerRef.current.getAttribute('id');
+    const isInsideContainer = containerRef.current.contains(target);
+    const isInsideContentEditable = target?.closest(`[${PARENT_LEXICAL_ID_ATTRIBUTE}="${CONTENT_EDITABLE_PREFIX + lexicalParentId}"]`);
+    const isInsideModal = showAddEndnoteModal || showAddContentModal || alignMenuAnchor || tableCreatorAnchor;
+    
+    // Check if target is within any lexical editor content
+    const isInsideLexicalContent = target?.closest('.lexical-editor-input') || 
+                                  target?.closest('.lexical-editor-inner') ||
+                                  target?.closest('.lexical-editor-container');
+
+    return isInsideContainer || isInsideContentEditable || isInsideModal || isInsideLexicalContent;
+  },
+  [showAddEndnoteModal, showAddContentModal, alignMenuAnchor, tableCreatorAnchor]
+);
 
   const toggleToolbarFocus = useCallback(() => {
     if (isEditorActive) {
@@ -243,17 +245,25 @@ export default function LexicalEditor({
   // Effects
   useEffect(() => showVariableValues(), []);
 
-  useEffect(() => {
-    const handleFocusOutside = (event) => {
-      if (!isTargetInsideOfEditor(event.type === 'mousedown' ? event.target : event.relatedTarget)) {
-        setIsToolbarActive(false);
-        setIsEditorActive(false);
-      }
-    };
+useEffect(() => {
+  const handleFocusOutside = (event) => {
+    const eventTarget = event.type === 'mousedown' ? event.target : event.relatedTarget;
+    
+    if (!isTargetInsideOfEditor(eventTarget)) {
+      // Add a longer delay to allow endnote operations to complete
+      setTimeout(() => {
+        // Double-check that we're still not in an editor before closing
+        if (!containerRef.current?.contains(document.activeElement)) {
+          setIsToolbarActive(false);
+          setIsEditorActive(false);
+        }
+      }, 200);
+    }
+  };
 
-    document.addEventListener('mousedown', handleFocusOutside);
-    return () => document.removeEventListener('mousedown', handleFocusOutside);
-  }, [isTargetInsideOfEditor]);
+  document.addEventListener('mousedown', handleFocusOutside);
+  return () => document.removeEventListener('mousedown', handleFocusOutside);
+}, [isTargetInsideOfEditor]);
 
   // This useEffect is for proper focusing on a button as we move sections up and down
   useEffect(() => {
