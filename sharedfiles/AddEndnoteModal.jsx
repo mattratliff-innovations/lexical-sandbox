@@ -61,9 +61,80 @@ export default function AddEndnoteModal({ showAddEndnoteModal, setShowAddEndnote
 
   // Effect to populate modal when opened
   useEffect(() => {
+    console.log('AddEndnoteModal useEffect triggered - showModal:', showAddEndnoteModal);
+    console.log('AddEndnoteModal - currentEndnote prop:', currentEndnote);
+    console.log('AddEndnoteModal - window.currentEndnoteContext:', window.currentEndnoteContext);
+    console.log('AddEndnoteModal - window.draftState:', window.draftState);
+    
     if (showAddEndnoteModal) {
       // Use currentEndnote prop first, then check global context
-      const endnoteToEdit = currentEndnote || window.currentEndnoteContext;
+      let endnoteToEdit = currentEndnote || window.currentEndnoteContext;
+      
+      // If we still don't have an endnote to edit, try one more detection attempt
+      if (!endnoteToEdit && editor && window.draftState?.endNotes) {
+        console.log('AddEndnoteModal - Attempting fallback endnote detection');
+        
+        editor.getEditorState().read(() => {
+          const selection = editor.getEditorState()._selection;
+          if (selection && selection.getNodes) {
+            const nodes = selection.getNodes();
+            
+            if (nodes.length > 0) {
+              const node = nodes[0];
+              const allTextContent = [];
+              
+              // Collect all possible text sources
+              if (node.getTextContent) {
+                allTextContent.push(node.getTextContent());
+              }
+              
+              if (selection.getTextContent) {
+                allTextContent.push(selection.getTextContent());
+              }
+              
+              // Try parent content
+              if (node.getParent && node.getParent().getTextContent) {
+                allTextContent.push(node.getParent().getTextContent());
+              }
+              
+              console.log('AddEndnoteModal - Fallback text sources:', allTextContent);
+              
+              // Search through all endnotes for any matches
+              for (const endnote of window.draftState.endNotes) {
+                for (const textSource of allTextContent) {
+                  if (textSource && (
+                    textSource.includes(endnote.text) ||
+                    endnote.text.includes(textSource) ||
+                    textSource.toLowerCase().includes(endnote.text.toLowerCase()) ||
+                    endnote.text.toLowerCase().includes(textSource.toLowerCase())
+                  )) {
+                    console.log('AddEndnoteModal - Fallback found match:', endnote, 'with text:', textSource);
+                    endnoteToEdit = {
+                      __footnoteId: endnote.index,
+                      __text: endnote.text,
+                      __endnoteValue: endnote.value,
+                      text: endnote.text,
+                      value: endnote.value,
+                      index: endnote.index,
+                      getEndnoteId: () => endnote.index,
+                      getTextContent: () => endnote.text,
+                      getEndnoteValue: () => endnote.value
+                    };
+                    
+                    // Update the global context too
+                    window.currentEndnoteContext = endnoteToEdit;
+                    break;
+                  }
+                }
+                
+                if (endnoteToEdit) break;
+              }
+            }
+          }
+        });
+      }
+      
+      console.log('AddEndnoteModal - Final endnoteToEdit:', endnoteToEdit);
       
       if (endnoteToEdit) {
         // Editing existing endnote - get data from the endnote object
@@ -78,15 +149,20 @@ export default function AddEndnoteModal({ showAddEndnoteModal, setShowAddEndnote
           endnoteToEdit.value ||
           '';
 
+        console.log('AddEndnoteModal - extracted text:', endnoteText);
+        console.log('AddEndnoteModal - extracted value:', endnoteValueData);
+
         setSelectedWord(endnoteText);
         setEndnoteValue(endnoteValueData);
       } else {
         // Creating new endnote - get selected text from editor
+        console.log('AddEndnoteModal - creating new endnote');
         if (editor) {
           editor.getEditorState().read(() => {
             const selection = editor.getEditorState()._selection;
             if (selection) {
               const selectedText = selection.getTextContent();
+              console.log('AddEndnoteModal - selected text from editor:', selectedText);
               setSelectedWord(selectedText || '');
             }
           });
