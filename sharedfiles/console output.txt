@@ -1,0 +1,21 @@
+textContent =  Standard Paragraph[1] content 1
+ScribeDocument.jsx:64 Using global endnote manager, found: [{…}]
+ScribeDocument.jsx:64 Using global endnote manager, found: [{…}]
+ScribeDocument.jsx:64 Using global endnote manager, found: [{…}]
+ScribeDocument.jsx:64 Using global endnote manager, found: [{…}]0: {index: 1, text: 'Paragraph', value: 'highlighting the paragraph', ref: 'endnote-ref-1'}length: 1[[Prototype]]: Array(0)
+AddEndnoteModal.jsx:64 AddEndnoteModal useEffect triggered - showModal: true
+AddEndnoteModal.jsx:65 AddEndnoteModal - currentEndnote prop: null
+AddEndnoteModal.jsx:66 AddEndnoteModal - window.currentEndnoteContext: null
+AddEndnoteModal.jsx:67 AddEndnoteModal - window.draftState: undefined
+AddEndnoteModal.jsx:137 AddEndnoteModal - Final endnoteToEdit: null
+AddEndnoteModal.jsx:159 AddEndnoteModal - creating new endnote
+AddEndnoteModal.jsx:165 AddEndnoteModal - selected text from editor: 
+ScribeDocument.jsx:64 Using global endnote manager, found: [{…}]
+ScribeDocument.jsx:64 Using global endnote manager, found: [
+    {
+        "index": 1,
+        "text": "Paragraph",
+        "value": "highlighting the paragraph",
+        "ref": "endnote-ref-1"
+    }
+]
