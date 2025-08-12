@@ -325,7 +325,8 @@ export function useEndnotePlugin(handleSetSelectedText, handleSetCanCreateEndnot
         const root = $getRoot();
         const textContent = root.getTextContent();
         
-        console.log('Parsing existing endnotes from content:', textContent);
+        console.log('=== PARSING ENDNOTES ===');
+        console.log('Full text content:', JSON.stringify(textContent));
         console.log('Text content length:', textContent.length);
         
         // Look for endnote patterns like "word[1]", "phrase[2]", etc.
@@ -333,6 +334,9 @@ export function useEndnotePlugin(handleSetSelectedText, handleSetCanCreateEndnot
         const endnoteRegex = /(.+?)\[(\d+)\]/g;
         let match;
         let foundCount = 0;
+        
+        // Reset the regex lastIndex to ensure we start from the beginning
+        endnoteRegex.lastIndex = 0;
         
         while ((match = endnoteRegex.exec(textContent)) !== null) {
           const [fullMatch, text, footnoteId] = match;
@@ -344,7 +348,8 @@ export function useEndnotePlugin(handleSetSelectedText, handleSetCanCreateEndnot
             text: text.trim(),
             footnoteId,
             id,
-            startIndex: match.index
+            startIndex: match.index,
+            endIndex: match.index + match[0].length
           });
           
           // Clean up the text (remove extra whitespace)
@@ -357,9 +362,9 @@ export function useEndnotePlugin(handleSetSelectedText, handleSetCanCreateEndnot
             const endnoteValue = existingEndnote ? existingEndnote.value : '';
             
             window.endnoteManager.addEndnote(id, cleanText, endnoteValue, `endnote-ref-${id}`);
-            console.log(`Registered existing endnote ${id}: "${cleanText}" with value: "${endnoteValue}"`);
+            console.log(`✓ Registered existing endnote ${id}: "${cleanText}" with value: "${endnoteValue}"`);
           } else if (window.endnoteManager && window.endnoteManager.endnotes.has(id)) {
-            console.log(`Endnote ${id} already exists in manager`);
+            console.log(`⚠ Endnote ${id} already exists in manager`);
           }
         }
         
@@ -386,19 +391,59 @@ export function useEndnotePlugin(handleSetSelectedText, handleSetCanCreateEndnot
             }
           }
         }
+        
+        console.log('=== END PARSING ===');
       });
     };
 
-    // Parse existing endnotes when the plugin initializes
-    const timeoutId = setTimeout(() => {
-      parseExistingEndnotes();
-    }, 100); // Small delay to ensure content is loaded
+    // Try multiple initialization approaches to ensure content is loaded
+    let initAttempts = 0;
+    const maxAttempts = 5;
+    
+    const tryParseEndnotes = () => {
+      initAttempts++;
+      console.log(`Initialization attempt ${initAttempts}/${maxAttempts}`);
+      
+      // Check if there's actual content to parse
+      const hasContent = editor.getEditorState().read(() => {
+        const root = $getRoot();
+        const textContent = root.getTextContent();
+        return textContent && textContent.trim().length > 0;
+      });
+      
+      if (hasContent) {
+        console.log('Content found, parsing endnotes...');
+        parseExistingEndnotes();
+      } else if (initAttempts < maxAttempts) {
+        console.log('No content yet, retrying in 200ms...');
+        setTimeout(tryParseEndnotes, 200);
+      } else {
+        console.log('Max attempts reached, no content found');
+      }
+    };
+
+    // Start parsing attempts
+    const initialTimeout = setTimeout(tryParseEndnotes, 100);
+
+    // Also listen for editor state changes that might indicate content loading
+    const removeUpdateListener = editor.registerUpdateListener(({ editorState, prevEditorState }) => {
+      // Only parse if this seems like initial content loading
+      const currentText = editorState.read(() => $getRoot().getTextContent());
+      const prevText = prevEditorState ? prevEditorState.read(() => $getRoot().getTextContent()) : '';
+      
+      // If content just appeared or significantly changed, try parsing
+      if (currentText && currentText !== prevText && currentText.includes('[')) {
+        console.log('Content change detected with brackets, parsing endnotes...');
+        setTimeout(parseExistingEndnotes, 50);
+      }
+    });
 
     const checkForSelectedText = () => {
       editor.update(() => {
         const root = $getRoot();
         const textContent = root.getTextContent();
-        console.log('textContent = ', textContent.trim());
+        // Remove the frequent logging here as it's too noisy
+        // console.log('textContent = ', textContent.trim());
       });
     };
 
@@ -422,7 +467,7 @@ export function useEndnotePlugin(handleSetSelectedText, handleSetCanCreateEndnot
       });
     };
 
-    const removeUpdateListener = editor.registerUpdateListener(({ editorState }) => {
+    const removeSelectionListener = editor.registerUpdateListener(({ editorState }) => {
       editorState.read(() => {
         checkForSelectedText();
         checkSelection();
@@ -430,8 +475,9 @@ export function useEndnotePlugin(handleSetSelectedText, handleSetCanCreateEndnot
     });
 
     return () => {
-      clearTimeout(timeoutId);
+      clearTimeout(initialTimeout);
       removeUpdateListener();
+      removeSelectionListener();
     };
   }, [editor, handleSetSelectedText, handleSetCanCreateEndnote, handleSetCurrentEndnote]);
 
