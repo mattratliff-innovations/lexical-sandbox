@@ -193,8 +193,7 @@ export class EndnoteNode extends TextNode {
 }
 
 export function $createEndnoteNode(text, footnoteId, endnoteValue = '') {
-  const node = new EndnoteNode(text, footnoteId, endnoteValue);
-  return node;
+  return new EndnoteNode(text, footnoteId, endnoteValue);
 }
 
 export function $isEndnoteNode(node) {
@@ -314,17 +313,23 @@ export function useEndnotePlugin(handleSetSelectedText, handleSetCanCreateEndnot
         // Only proceed if there is actual selected text
         if (selectedText.trim() !== '') {
           try {
-            // Create the footnote node
-            const footnoteNode = new EndnoteNode(selectedText, footnoteId, endnoteValue);
+            // Use the factory function which should handle the node creation properly
+            const footnoteNode = $createEndnoteNode(selectedText, footnoteId, endnoteValue);
             
             // Replace the selection with the footnote node
-            selection.removeText();
             selection.insertNodes([footnoteNode]);
           } catch (error) {
             console.error('Error creating endnote node:', error);
-            // Fallback: just insert text with brackets
+            console.error('Error stack:', error.stack);
+            
+            // Fallback: create a simple text node with endnote marking
             const fallbackText = `${selectedText}[${footnoteId}]`;
             selection.insertText(fallbackText);
+            
+            // Still register with endnote manager for tracking
+            if (window.endnoteManager) {
+              window.endnoteManager.addEndnote(footnoteId, selectedText, endnoteValue, `endnote-ref-${footnoteId}`);
+            }
           }
         }
       });
