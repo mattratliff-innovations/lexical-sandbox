@@ -62,21 +62,24 @@ export default function AddEndnoteModal({ showAddEndnoteModal, setShowAddEndnote
   // Effect to populate modal when opened
   useEffect(() => {
     if (showAddEndnoteModal) {
-      if (currentEndnote) {
-        // Editing existing endnote - get data from the currentEndnote object
+      // Use currentEndnote prop first, then check global context
+      const endnoteToEdit = currentEndnote || window.currentEndnoteContext;
+      
+      if (endnoteToEdit) {
+        // Editing existing endnote - get data from the endnote object
         const endnoteText =
-          currentEndnote.__text ||
-          (typeof currentEndnote.getTextContent === 'function' ? currentEndnote.getTextContent() : '') ||
-          currentEndnote.text ||
+          endnoteToEdit.__text ||
+          (typeof endnoteToEdit.getTextContent === 'function' ? endnoteToEdit.getTextContent() : '') ||
+          endnoteToEdit.text ||
           '';
-        const endnoteValue =
-          currentEndnote.__endnoteValue ||
-          (typeof currentEndnote.getEndnoteValue === 'function' ? currentEndnote.getEndnoteValue() : '') ||
-          currentEndnote.value ||
+        const endnoteValueData =
+          endnoteToEdit.__endnoteValue ||
+          (typeof endnoteToEdit.getEndnoteValue === 'function' ? endnoteToEdit.getEndnoteValue() : '') ||
+          endnoteToEdit.value ||
           '';
 
         setSelectedWord(endnoteText);
-        setEndnoteValue(endnoteValue);
+        setEndnoteValue(endnoteValueData);
       } else {
         // Creating new endnote - get selected text from editor
         if (editor) {
@@ -98,15 +101,30 @@ export default function AddEndnoteModal({ showAddEndnoteModal, setShowAddEndnote
     if (!showAddEndnoteModal) {
       setEndnoteValue('');
       setSelectedWord('');
+      // Clear global context
+      window.currentEndnoteContext = null;
     }
   }, [showAddEndnoteModal]);
 
   const handleSubmit = () => {
-    if (currentEndnote && (currentEndnote.__footnoteId || typeof currentEndnote.getEndnoteId === 'function')) {
+    const endnoteToUpdate = currentEndnote || window.currentEndnoteContext;
+    
+    if (endnoteToUpdate && (endnoteToUpdate.__footnoteId || typeof endnoteToUpdate.getEndnoteId === 'function')) {
       // Update existing endnote
-      const endnoteId = currentEndnote.__footnoteId || currentEndnote.getEndnoteId();
-      if (window.updateEndnote) {
-        window.updateEndnote(endnoteId, endnoteValue);
+      const endnoteId = endnoteToUpdate.__footnoteId || endnoteToUpdate.getEndnoteId();
+      
+      // Update the draft state endnotes
+      if (window.draftState?.endNotes) {
+        const updatedEndNotes = window.draftState.endNotes.map(note => 
+          note.index === endnoteId 
+            ? { ...note, value: endnoteValue, text: selectedWord }
+            : note
+        );
+        
+        // Update global state (this should trigger a save)
+        if (window.updateDraftEndNotes) {
+          window.updateDraftEndNotes(updatedEndNotes);
+        }
       }
     } else {
       // Create new endnote
@@ -120,7 +138,7 @@ export default function AddEndnoteModal({ showAddEndnoteModal, setShowAddEndnote
     setShowAddEndnoteModal(false);
   };
 
-  const isEditing = !!currentEndnote;
+  const isEditing = !!(currentEndnote || window.currentEndnoteContext);
 
   return (
     <ScribeModal showModal={showAddEndnoteModal} width="md">
