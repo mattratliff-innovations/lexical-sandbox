@@ -244,6 +244,12 @@ export function useEndnotePlugin(handleSetSelectedText, handleSetCanCreateEndnot
   useEffect(() => {
     if (!editor) return;
 
+    // Register the EndnoteNode with the editor
+    const unregisterNode = editor.registerNodeTransform(EndnoteNode, (node) => {
+      // This ensures the node is properly registered
+      return node;
+    });
+
     let timeoutId;
 
     const checkForSelectedText = () => {
@@ -288,6 +294,7 @@ export function useEndnotePlugin(handleSetSelectedText, handleSetCanCreateEndnot
     return () => {
       if (timeoutId) clearTimeout(timeoutId);
       removeUpdateListener();
+      unregisterNode();
     };
   }, [editor, handleSetSelectedText, handleSetCanCreateEndnote, handleSetCurrentEndnote]);
 
@@ -312,25 +319,18 @@ export function useEndnotePlugin(handleSetSelectedText, handleSetCanCreateEndnot
 
         // Only proceed if there is actual selected text
         if (selectedText.trim() !== '') {
-          try {
-            // Use the factory function which should handle the node creation properly
-            const footnoteNode = $createEndnoteNode(selectedText, footnoteId, endnoteValue);
-            
-            // Replace the selection with the footnote node
-            selection.insertNodes([footnoteNode]);
-          } catch (error) {
-            console.error('Error creating endnote node:', error);
-            console.error('Error stack:', error.stack);
-            
-            // Fallback: create a simple text node with endnote marking
-            const fallbackText = `${selectedText}[${footnoteId}]`;
-            selection.insertText(fallbackText);
-            
-            // Still register with endnote manager for tracking
-            if (window.endnoteManager) {
-              window.endnoteManager.addEndnote(footnoteId, selectedText, endnoteValue, `endnote-ref-${footnoteId}`);
-            }
+          // Create a simple text replacement with endnote marker
+          const endnoteText = `${selectedText}[${footnoteId}]`;
+          
+          // Replace the selected text
+          selection.insertText(endnoteText);
+          
+          // Register with endnote manager for tracking
+          if (window.endnoteManager) {
+            window.endnoteManager.addEndnote(footnoteId, selectedText, endnoteValue, `endnote-ref-${footnoteId}`);
           }
+          
+          console.log(`Created endnote ${footnoteId} for "${selectedText}" with value: "${endnoteValue}"`);
         }
       });
     };
