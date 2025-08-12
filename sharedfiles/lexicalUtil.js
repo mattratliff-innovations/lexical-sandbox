@@ -95,13 +95,29 @@ const addCustomHtmlStyles = (html, tableAlignments, tableWidths = [], tableColum
   });
 };
 
-// Custom HTML transformer for EndnoteNode
+// Enhanced function to add comprehensive endnote attributes for proper storage and retrieval
+const addEnhancedEndnoteAttributes = (html) => {
+  // This function adds proper attributes to endnote spans for extraction and reconstruction
+  return html.replace(/<span([^>]*class="[^"]*footnote[^"]*"[^>]*)>([^<]*)<sup>\[(\d+)\]<\/sup><\/span>/g, 
+    (match, attributes, text, id) => {
+      // Get endnote value from global manager if available
+      let endnoteValue = '';
+      if (window.endnoteManager) {
+        const globalEndnotes = window.endnoteManager.getAllEndnotes();
+        const matchingEndnote = globalEndnotes.find(note => parseInt(note.index) === parseInt(id));
+        if (matchingEndnote) {
+          endnoteValue = matchingEndnote.value || '';
+        }
+      }
+      
+      // Add comprehensive data attributes for proper reconstruction
+      return `<span${attributes} data-footnote-id="${id}" data-endnote-text="${text.trim()}" data-endnote-value="${endnoteValue}" data-is-endnote="true">${text}<sup>[${id}]</sup></span>`;
+    });
+};
+
+// Legacy function for backward compatibility - now calls enhanced version
 const addEndnoteAttributes = (html) => {
-  // This function adds proper attributes to endnote spans for extraction
-  return html.replace(/<span([^>]*class="[^"]*footnote[^"]*"[^>]*)>([^<]*)<sup>\[(\d+)\]<\/sup><\/span>/g, (match, attributes, text, id) => {
-    // Extract existing attributes and add our custom ones
-    return `<span${attributes} data-footnote-id="${id}" data-endnote-text="${text.trim()}" data-endnote-value="">${text}<sup>[${id}]</sup></span>`;
-  });
+  return addEnhancedEndnoteAttributes(html);
 };
 
 export const exportLexicalHtml = (editor) => {
@@ -119,8 +135,8 @@ export const exportLexicalHtml = (editor) => {
   // Apply table styles
   html = addCustomHtmlStyles(html, tableAlignments, tableWidths, tableColumnWidths);
 
-  // Add endnote attributes for proper extraction
-  html = addEndnoteAttributes(html);
+  // Add enhanced endnote attributes for proper extraction and reconstruction
+  html = addEnhancedEndnoteAttributes(html);
 
   return html;
 };
@@ -205,12 +221,12 @@ export const editorConfig = {
     OrganizationNameNode,
     LetterDateNode,
     AlienNumberNode,
+    EndnoteNode, // Add EndnoteNode to the list of nodes
     { replace: TextNode, with: (node) => new ExtendedTextNode(node.__text) },
     ListNode,
     TableCellNode,
     TableNode,
     TableRowNode,
-    EndnoteNode,
   ],
   // Handling of errors during update
   onError(error) {

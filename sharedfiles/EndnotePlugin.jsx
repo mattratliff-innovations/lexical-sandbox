@@ -12,6 +12,7 @@ window.endnoteManager = window.endnoteManager || {
   initialized: false,
 
   initializeFromLetter: function (letterData) {
+    console.log('Initializing endnote manager from letter data:', letterData);
     this.reset();
     if (letterData && letterData.endNotes && Array.isArray(letterData.endNotes)) {
       let maxId = 0;
@@ -23,11 +24,12 @@ window.endnoteManager = window.endnoteManager || {
           ref: endnote.ref || `endnote-ref-${id}`,
         });
         maxId = Math.max(maxId, id);
+        console.log(`Loaded endnote ${id}: text="${endnote.text}", value="${endnote.value}"`);
       });
       this.counter = maxId + 1;
     }
     this.initialized = true;
-    console.log('Endnote manager initialized from letter data:', this.getAllEndnotes());
+    console.log('Endnote manager initialized with:', this.getAllEndnotes());
   },
 
   reset: function () {
@@ -42,6 +44,7 @@ window.endnoteManager = window.endnoteManager || {
   },
 
   addEndnote: function (id, text, value, ref) {
+    console.log(`Adding endnote ${id}: text="${text}", value="${value}"`);
     this.endnotes.set(id, {
       text,
       value,
@@ -54,10 +57,15 @@ window.endnoteManager = window.endnoteManager || {
   },
 
   updateEndnote: function (id, value) {
+    console.log(`Updating endnote ${id} with value: "${value}"`);
     const endnote = this.endnotes.get(id);
     if (endnote) {
       endnote.value = value;
     }
+  },
+
+  getEndnote: function (id) {
+    return this.endnotes.get(id);
   },
 
   getAllEndnotes: function () {
@@ -138,8 +146,13 @@ export class EndnoteNode extends TextNode {
   createDOM(config) {
     const element = super.createDOM(config);
     element.style.padding = '1px 2px';
-
-    // Add anchor ID using the stored endnote reference
+    element.className = 'footnote-highlight';
+    
+    // Add comprehensive data attributes for reconstruction
+    element.setAttribute('data-footnote-id', this.__footnoteId);
+    element.setAttribute('data-endnote-text', this.__text);
+    element.setAttribute('data-endnote-value', this.__endnoteValue);
+    element.setAttribute('data-is-endnote', 'true');
     element.id = this.__endnoteRef;
 
     // Add footnote number indicator
@@ -166,11 +179,17 @@ export class EndnoteNode extends TextNode {
   }
 
   static importJSON(serializedNode) {
-    const { text, footnoteId, endnoteValue, endnoteRef } = serializedNode;
+    const { text, footnoteId, endnoteValue, endnoteRef, version } = serializedNode;
     const node = $createEndnoteNode(text, footnoteId, endnoteValue);
     if (endnoteRef) {
       node.__endnoteRef = endnoteRef;
     }
+    
+    // Ensure global endnote manager is updated
+    if (window.endnoteManager && footnoteId) {
+      window.endnoteManager.addEndnote(footnoteId, text, endnoteValue, endnoteRef);
+    }
+    
     return node;
   }
 
@@ -180,8 +199,9 @@ export class EndnoteNode extends TextNode {
       footnoteId: this.__footnoteId,
       endnoteValue: this.__endnoteValue,
       endnoteRef: this.__endnoteRef,
+      text: this.__text,
       type: 'footnote',
-      version: 1,
+      version: 2, // Enhanced version with better data preservation
     };
   }
 }
@@ -286,6 +306,15 @@ export function useEndnotePlugin(handleSetSelectedText, handleSetCanCreateEndnot
           handleSetSelectedText(selectedText);
           handleSetCanCreateEndnote(canCreateEndnote);
           handleSetCurrentEndnote(currentEndnoteNode);
+
+          // Debug logging for endnote detection
+          if (currentEndnoteNode) {
+            console.log('Found current endnote node:', {
+              id: currentEndnoteNode.getEndnoteId(),
+              text: currentEndnoteNode.getTextContent(),
+              value: currentEndnoteNode.getEndnoteValue()
+            });
+          }
         } else {
           handleSetSelectedText('');
           handleSetCanCreateEndnote(false);

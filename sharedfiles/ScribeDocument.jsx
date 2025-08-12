@@ -315,6 +315,13 @@ const ScribeDocument = forwardRef(
 
       setDraftState({ ...draft, ...{ sections: nextSections } });
       setOrganizationSignature(findOrganizationSignature(draft));
+      
+      // Initialize endnote manager with letter data if available
+      // This is crucial for proper endnote recognition when loading existing letters
+      if (window.endnoteManager && draft) {
+        console.log('Initializing endnote manager with draft data:', draft);
+        window.endnoteManager.initializeFromLetter(draft);
+      }
     }, [draft]);
 
     return (
