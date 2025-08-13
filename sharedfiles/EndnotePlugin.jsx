@@ -377,13 +377,123 @@ export function useEndnotePlugin(handleSetSelectedText, handleSetCanCreateEndnot
       }
     };
 
+    // Function to parse existing endnotes from HTML content with superscripts
+    const parseHtmlEndnotes = () => {
+      editor.update(() => {
+        const root = $getRoot();
+        let hasChanges = false;
+
+        console.log('=== PARSING HTML SUPERSCRIPT ENDNOTES ===');
+
+        // Recursively process nodes to find superscript endnotes
+        const processNode = (node) => {
+          const children = node.getChildren ? node.getChildren() : [];
+          
+          for (let i = 0; i < children.length; i++) {
+            const child = children[i];
+            
+            // Look for patterns where text is followed by a superscript
+            if ($isTextNode(child) && i + 1 < children.length) {
+              const nextChild = children[i + 1];
+              
+              // Check if next node is a superscript element or contains superscript pattern
+              const isSupElement = nextChild.getType && (
+                nextChild.getType() === 'element' || 
+                nextChild.__element === 'sup'
+              );
+              
+              let supText = '';
+              let footnoteId = null;
+              
+              // Try to extract superscript content
+              if (isSupElement) {
+                // Get text content from the sup element
+                supText = nextChild.getTextContent ? nextChild.getTextContent() : '';
+                console.log(`Found sup element with text: "${supText}"`);
+              } else if ($isTextNode(nextChild)) {
+                // Check if the next text node contains superscript pattern
+                const nextText = nextChild.getTextContent();
+                const supMatch = nextText.match(/^\[(\d+)\]/);
+                if (supMatch) {
+                  supText = supMatch[0];
+                  footnoteId = parseInt(supMatch[1]);
+                  console.log(`Found inline sup pattern: "${supText}" with ID ${footnoteId}`);
+                }
+              }
+              
+              // Extract footnote ID from superscript text
+              if (!footnoteId && supText) {
+                const idMatch = supText.match(/\[(\d+)\]/);
+                if (idMatch) {
+                  footnoteId = parseInt(idMatch[1]);
+                }
+              }
+              
+              if (footnoteId) {
+                const endnoteText = child.getTextContent().trim();
+                console.log(`Found HTML endnote: "${endnoteText}" with ID ${footnoteId}`);
+                
+                // Register with global endnote manager
+                if (window.endnoteManager && !window.endnoteManager.endnotes.has(footnoteId)) {
+                  const existingEndnote = window.endnoteManager.getAllEndnotes().find(e => e.index === footnoteId);
+                  const endnoteValue = existingEndnote ? existingEndnote.value : '';
+                  
+                  window.endnoteManager.addEndnote(footnoteId, endnoteText, endnoteValue, `endnote-ref-${footnoteId}`);
+                  console.log(`Registered HTML endnote ${footnoteId}: "${endnoteText}" with value: "${endnoteValue}"`);
+                }
+                
+                // Try to convert to proper EndnoteNode
+                try {
+                  const endnoteValue = window.endnoteManager?.endnotes.get(footnoteId)?.value || '';
+                  const endnoteNode = $createEndnoteNode(endnoteText, footnoteId, endnoteValue);
+                  
+                  // Replace the text node and remove the superscript
+                  child.replace(endnoteNode);
+                  nextChild.remove();
+                  
+                  console.log(`Successfully converted HTML endnote to EndnoteNode: "${endnoteText}[${footnoteId}]"`);
+                  hasChanges = true;
+                  
+                  // Skip the next child since we removed it
+                  i++;
+                  
+                } catch (error) {
+                  console.error('Error creating EndnoteNode from HTML:', error);
+                  // Fallback: combine text and superscript into single text node
+                  const combinedText = `${endnoteText}[${footnoteId}]`;
+                  const newTextNode = $createTextNode(combinedText);
+                  child.replace(newTextNode);
+                  nextChild.remove();
+                  hasChanges = true;
+                  i++;
+                }
+              }
+            }
+            
+            // Recursively process child nodes
+            processNode(child);
+          }
+        };
+        
+        processNode(root);
+        
+        if (hasChanges) {
+          console.log('HTML superscript endnote conversion completed with changes');
+        } else {
+          console.log('No HTML superscript endnotes found for conversion');
+        }
+        
+        console.log('=== END HTML PARSING ===');
+      });
+    };
+
     // Function to parse existing endnotes from the editor content (fallback)
-    const parseExistingEndnotes = () => {
+    const parseTextEndnotes = () => {
       editor.getEditorState().read(() => {
         const root = $getRoot();
         const textContent = root.getTextContent();
         
-        console.log('Fallback: Parsing existing endnotes from content:', textContent);
+        console.log('Text fallback: Parsing existing endnotes from content:', textContent);
         console.log('Text content length:', textContent.length);
         
         // Look for endnote patterns like "word[1]", "phrase[2]", etc.
@@ -396,7 +506,7 @@ export function useEndnotePlugin(handleSetSelectedText, handleSetCanCreateEndnot
           const id = parseInt(footnoteId);
           foundCount++;
           
-          console.log(`Fallback Match ${foundCount}:`, {
+          console.log(`Text fallback Match ${foundCount}:`, {
             fullMatch,
             text: text.trim(),
             footnoteId,
@@ -410,11 +520,11 @@ export function useEndnotePlugin(handleSetSelectedText, handleSetCanCreateEndnot
           // Register with global endnote manager if not already present
           if (window.endnoteManager && !window.endnoteManager.endnotes.has(id)) {
             window.endnoteManager.addEndnote(id, cleanText, '', `endnote-ref-${id}`);
-            console.log(`Fallback: Registered existing endnote ${id}: "${cleanText}"`);
+            console.log(`Text fallback: Registered existing endnote ${id}: "${cleanText}"`);
           }
         }
         
-        console.log(`Fallback: Total endnotes found: ${foundCount}`);
+        console.log(`Text fallback: Total endnotes found: ${foundCount}`);
         
         // Update counter after parsing
         if (window.endnoteManager && foundCount > 0) {
@@ -422,21 +532,29 @@ export function useEndnotePlugin(handleSetSelectedText, handleSetCanCreateEndnot
           const maxId = Math.max(...allEndnotes.map(e => parseInt(e.index)));
           if (maxId >= window.endnoteManager.counter) {
             window.endnoteManager.counter = maxId + 1;
-            console.log(`Fallback: Updated endnote counter to ${window.endnoteManager.counter}`);
+            console.log(`Text fallback: Updated endnote counter to ${window.endnoteManager.counter}`);
           }
         }
       });
     };
 
-    // Try to initialize from global manager first, then fallback to parsing
+    // Try to initialize from global manager first, then try HTML parsing, then text parsing
     const initializeEndnotes = () => {
       console.log('Attempting to initialize endnotes...');
       
       if (window.endnoteManager && window.endnoteManager.initialized) {
         initializeFromGlobalManager();
       } else {
-        console.log('Global manager not ready, trying fallback parsing...');
-        parseExistingEndnotes();
+        console.log('Global manager not ready, trying HTML parsing...');
+        
+        // First try HTML superscript parsing
+        parseHtmlEndnotes();
+        
+        // Then try text pattern parsing as additional fallback
+        setTimeout(() => {
+          console.log('Also trying text pattern parsing as backup...');
+          parseTextEndnotes();
+        }, 100);
         
         // Try global manager again after a delay
         setTimeout(() => {
