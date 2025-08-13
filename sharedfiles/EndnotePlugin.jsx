@@ -542,24 +542,29 @@ export function useEndnotePlugin(handleSetSelectedText, handleSetCanCreateEndnot
     const initializeEndnotes = () => {
       console.log('Attempting to initialize endnotes...');
       
+      // Always try HTML parsing first to convert loaded HTML content to EndnoteNodes
+      console.log('Starting HTML superscript parsing...');
+      parseHtmlEndnotes();
+      
+      // Also try text pattern parsing as backup
+      setTimeout(() => {
+        console.log('Running text pattern parsing as backup...');
+        parseTextEndnotes();
+      }, 100);
+      
+      // Initialize from global manager if available
       if (window.endnoteManager && window.endnoteManager.initialized) {
-        initializeFromGlobalManager();
-      } else {
-        console.log('Global manager not ready, trying HTML parsing...');
-        
-        // First try HTML superscript parsing
-        parseHtmlEndnotes();
-        
-        // Then try text pattern parsing as additional fallback
+        console.log('Global manager is ready, reading endnote values...');
         setTimeout(() => {
-          console.log('Also trying text pattern parsing as backup...');
-          parseTextEndnotes();
-        }, 100);
+          initializeFromGlobalManager();
+        }, 200);
+      } else {
+        console.log('Global manager not ready, will retry...');
         
         // Try global manager again after a delay
         setTimeout(() => {
           if (window.endnoteManager && window.endnoteManager.initialized) {
-            console.log('Global manager now ready, re-initializing...');
+            console.log('Global manager now ready, reading endnote values...');
             initializeFromGlobalManager();
           }
         }, 500);
