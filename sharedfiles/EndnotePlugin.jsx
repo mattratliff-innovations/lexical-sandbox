@@ -266,7 +266,7 @@ function checkForEndnoteAtCursor(selection) {
     return currentEndnoteNode;
   }
 
-  // Then check for text-based endnote patterns
+  // Then check for text-based endnote patterns using global manager
   const selectedText = selection.getTextContent();
   
   // If no selection, check if cursor is within an endnote pattern
@@ -278,8 +278,36 @@ function checkForEndnoteAtCursor(selection) {
       
       console.log(`Checking cursor at offset ${offset} in text: "${text}"`);
       
-      // Look for endnote pattern around cursor position
-      // Use more flexible regex
+      // Check if we have endnotes in the global manager
+      if (window.endnoteManager) {
+        const allEndnotes = window.endnoteManager.getAllEndnotes();
+        console.log(`Checking against ${allEndnotes.length} endnotes from global manager`);
+        
+        // Look for any endnote text patterns in the current text
+        for (const endnote of allEndnotes) {
+          const endnotePattern = `${endnote.text}[${endnote.index}]`;
+          const patternIndex = text.indexOf(endnotePattern);
+          
+          if (patternIndex !== -1) {
+            const patternStart = patternIndex;
+            const patternEnd = patternIndex + endnotePattern.length;
+            
+            console.log(`Found endnote pattern "${endnotePattern}" at ${patternStart}-${patternEnd}, cursor at ${offset}`);
+            
+            if (offset >= patternStart && offset <= patternEnd) {
+              console.log(`Cursor is within endnote: "${endnote.text}" [${endnote.index}]`);
+              
+              return {
+                getEndnoteId: () => parseInt(endnote.index),
+                getTextContent: () => endnote.text,
+                getEndnoteValue: () => endnote.value || ''
+              };
+            }
+          }
+        }
+      }
+      
+      // Fallback: Look for endnote pattern around cursor position using regex
       const endnoteRegex = /(.+?)\[(\d+)\]/g;
       let match;
       
@@ -287,22 +315,23 @@ function checkForEndnoteAtCursor(selection) {
         const matchStart = match.index;
         const matchEnd = match.index + match[0].length;
         
-        console.log(`Found endnote pattern at ${matchStart}-${matchEnd}: "${match[0]}"`);
+        console.log(`Regex found endnote pattern at ${matchStart}-${matchEnd}: "${match[0]}"`);
         
         if (offset >= matchStart && offset <= matchEnd) {
           const [fullMatch, endnoteText, footnoteId] = match;
-          console.log(`Cursor is within endnote: "${endnoteText.trim()}" [${footnoteId}]`);
+          console.log(`Cursor is within regex endnote: "${endnoteText.trim()}" [${footnoteId}]`);
+          
+          // Try to get value from global manager
+          let endnoteValue = '';
+          if (window.endnoteManager) {
+            const endnote = window.endnoteManager.endnotes.get(parseInt(footnoteId));
+            endnoteValue = endnote ? endnote.value : '';
+          }
           
           return {
             getEndnoteId: () => parseInt(footnoteId),
             getTextContent: () => endnoteText.trim(),
-            getEndnoteValue: () => {
-              if (window.endnoteManager) {
-                const endnote = window.endnoteManager.endnotes.get(parseInt(footnoteId));
-                return endnote ? endnote.value : '';
-              }
-              return '';
-            }
+            getEndnoteValue: () => endnoteValue
           };
         }
       }
@@ -319,130 +348,108 @@ export function useEndnotePlugin(handleSetSelectedText, handleSetCanCreateEndnot
   useEffect(() => {
     if (!editor) return;
 
-    // Function to parse existing endnotes from the editor content
-    const parseExistingEndnotes = () => {
-      editor.update(() => {
-        const root = $getRoot();
-        let hasChanges = false;
-
-        // Recursively process all text nodes to find and convert endnote patterns
-        const processNode = (node) => {
-          if ($isTextNode(node)) {
-            const text = node.getTextContent();
-            
-            // Look for endnote patterns in this text node
-            const endnoteRegex = /(.+?)\[(\d+)\]/g;
-            const matches = [];
-            let match;
-            
-            while ((match = endnoteRegex.exec(text)) !== null) {
-              matches.push({
-                fullMatch: match[0],
-                text: match[1].trim(),
-                footnoteId: parseInt(match[2]),
-                startIndex: match.index,
-                endIndex: match.index + match[0].length
-              });
-            }
-            
-            if (matches.length > 0) {
-              console.log(`Found ${matches.length} endnote patterns in text node:`, text);
-              
-              // Process matches from end to start to maintain correct indices
-              matches.reverse().forEach(matchInfo => {
-                const { text: endnoteText, footnoteId, startIndex, endIndex } = matchInfo;
-                
-                console.log(`Converting endnote pattern: "${endnoteText}[${footnoteId}]"`);
-                
-                // Register with global endnote manager
-                if (window.endnoteManager && !window.endnoteManager.endnotes.has(footnoteId)) {
-                  const existingEndnote = window.endnoteManager.getAllEndnotes().find(e => e.index === footnoteId);
-                  const endnoteValue = existingEndnote ? existingEndnote.value : '';
-                  
-                  window.endnoteManager.addEndnote(footnoteId, endnoteText, endnoteValue, `endnote-ref-${footnoteId}`);
-                  console.log(`Registered endnote ${footnoteId}: "${endnoteText}"`);
-                }
-                
-                // Split the text node and insert EndnoteNode
-                const fullText = node.getTextContent();
-                const beforeText = fullText.substring(0, startIndex);
-                const afterText = fullText.substring(endIndex);
-                
-                const newNodes = [];
-                
-                // Add text before the endnote (if any)
-                if (beforeText) {
-                  newNodes.push($createTextNode(beforeText));
-                }
-                
-                // Add the EndnoteNode
-                try {
-                  const endnoteValue = window.endnoteManager?.endnotes.get(footnoteId)?.value || '';
-                  const endnoteNode = $createEndnoteNode(endnoteText, footnoteId, endnoteValue);
-                  newNodes.push(endnoteNode);
-                  console.log(`Created EndnoteNode for "${endnoteText}[${footnoteId}]"`);
-                } catch (error) {
-                  console.error('Error creating EndnoteNode:', error);
-                  // Fallback: keep original text
-                  newNodes.push($createTextNode(matchInfo.fullMatch));
-                }
-                
-                // Add text after the endnote (if any)
-                if (afterText) {
-                  newNodes.push($createTextNode(afterText));
-                }
-                
-                // Replace the original text node with the new nodes
-                if (newNodes.length > 0) {
-                  node.replace(newNodes[0]);
-                  for (let i = 1; i < newNodes.length; i++) {
-                    newNodes[i - 1].insertAfter(newNodes[i]);
-                  }
-                  hasChanges = true;
-                }
-              });
-            }
+    // Function to initialize endnotes from the global manager
+    const initializeFromGlobalManager = () => {
+      if (window.endnoteManager && window.endnoteManager.initialized) {
+        const allEndnotes = window.endnoteManager.getAllEndnotes();
+        console.log('Initializing endnotes from global manager:', allEndnotes);
+        
+        if (allEndnotes.length > 0) {
+          console.log(`Found ${allEndnotes.length} endnotes in global manager`);
+          
+          // The endnotes are already registered in the global manager
+          // We just need to ensure the counter is set correctly
+          const maxId = Math.max(...allEndnotes.map(e => parseInt(e.index)));
+          if (maxId >= window.endnoteManager.counter) {
+            window.endnoteManager.counter = maxId + 1;
+            console.log(`Updated endnote counter to ${window.endnoteManager.counter}`);
           }
           
-          // Recursively process child nodes
-          const children = node.getChildren ? node.getChildren() : [];
-          children.forEach(child => processNode(child));
-        };
+          // Log each endnote for debugging
+          allEndnotes.forEach(endnote => {
+            console.log(`Endnote ${endnote.index}: "${endnote.text}" = "${endnote.value}"`);
+          });
+        } else {
+          console.log('No endnotes found in global manager');
+        }
+      } else {
+        console.log('Global endnote manager not initialized yet');
+      }
+    };
+
+    // Function to parse existing endnotes from the editor content (fallback)
+    const parseExistingEndnotes = () => {
+      editor.getEditorState().read(() => {
+        const root = $getRoot();
+        const textContent = root.getTextContent();
         
-        // Also check for HTML patterns with superscript tags
-        const processHtmlEndnotes = () => {
-          // This is a more complex approach - we'd need to find sup tags and convert them
-          // For now, let's focus on the text pattern approach
-          console.log('Processing HTML endnote patterns...');
-        };
+        console.log('Fallback: Parsing existing endnotes from content:', textContent);
+        console.log('Text content length:', textContent.length);
         
-        console.log('Starting endnote parsing and conversion...');
-        processNode(root);
+        // Look for endnote patterns like "word[1]", "phrase[2]", etc.
+        const endnoteRegex = /(.+?)\[(\d+)\]/g;
+        let match;
+        let foundCount = 0;
         
-        // Update counter after processing
-        if (window.endnoteManager) {
-          const allEndnotes = window.endnoteManager.getAllEndnotes();
-          if (allEndnotes.length > 0) {
-            const maxId = Math.max(...allEndnotes.map(e => parseInt(e.index)));
-            if (maxId >= window.endnoteManager.counter) {
-              window.endnoteManager.counter = maxId + 1;
-              console.log(`Updated endnote counter to ${window.endnoteManager.counter}`);
-            }
+        while ((match = endnoteRegex.exec(textContent)) !== null) {
+          const [fullMatch, text, footnoteId] = match;
+          const id = parseInt(footnoteId);
+          foundCount++;
+          
+          console.log(`Fallback Match ${foundCount}:`, {
+            fullMatch,
+            text: text.trim(),
+            footnoteId,
+            id,
+            startIndex: match.index
+          });
+          
+          // Clean up the text (remove extra whitespace)
+          const cleanText = text.trim();
+          
+          // Register with global endnote manager if not already present
+          if (window.endnoteManager && !window.endnoteManager.endnotes.has(id)) {
+            window.endnoteManager.addEndnote(id, cleanText, '', `endnote-ref-${id}`);
+            console.log(`Fallback: Registered existing endnote ${id}: "${cleanText}"`);
           }
         }
         
-        if (hasChanges) {
-          console.log('Endnote conversion completed with changes');
-        } else {
-          console.log('No endnote patterns found for conversion');
+        console.log(`Fallback: Total endnotes found: ${foundCount}`);
+        
+        // Update counter after parsing
+        if (window.endnoteManager && foundCount > 0) {
+          const allEndnotes = window.endnoteManager.getAllEndnotes();
+          const maxId = Math.max(...allEndnotes.map(e => parseInt(e.index)));
+          if (maxId >= window.endnoteManager.counter) {
+            window.endnoteManager.counter = maxId + 1;
+            console.log(`Fallback: Updated endnote counter to ${window.endnoteManager.counter}`);
+          }
         }
       });
     };
 
-    // Parse existing endnotes when the plugin initializes
-    const timeoutId = setTimeout(() => {
-      parseExistingEndnotes();
-    }, 100); // Small delay to ensure content is loaded
+    // Try to initialize from global manager first, then fallback to parsing
+    const initializeEndnotes = () => {
+      console.log('Attempting to initialize endnotes...');
+      
+      if (window.endnoteManager && window.endnoteManager.initialized) {
+        initializeFromGlobalManager();
+      } else {
+        console.log('Global manager not ready, trying fallback parsing...');
+        parseExistingEndnotes();
+        
+        // Try global manager again after a delay
+        setTimeout(() => {
+          if (window.endnoteManager && window.endnoteManager.initialized) {
+            console.log('Global manager now ready, re-initializing...');
+            initializeFromGlobalManager();
+          }
+        }, 500);
+      }
+    };
+
+    // Initialize endnotes when the plugin loads
+    const timeoutId = setTimeout(initializeEndnotes, 100);
 
     const checkForSelectedText = () => {
       editor.update(() => {
