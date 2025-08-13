@@ -430,42 +430,113 @@ export function useEndnotePlugin(handleSetSelectedText, handleSetCanCreateEndnot
               }
               
               if (footnoteId) {
-                const endnoteText = child.getTextContent().trim();
-                console.log(`Found HTML endnote: "${endnoteText}" with ID ${footnoteId}`);
+                const fullText = child.getTextContent();
                 
-                // Register with global endnote manager
-                if (window.endnoteManager && !window.endnoteManager.endnotes.has(footnoteId)) {
-                  const existingEndnote = window.endnoteManager.getAllEndnotes().find(e => e.index === footnoteId);
-                  const endnoteValue = existingEndnote ? existingEndnote.value : '';
-                  
-                  window.endnoteManager.addEndnote(footnoteId, endnoteText, endnoteValue, `endnote-ref-${footnoteId}`);
-                  console.log(`Registered HTML endnote ${footnoteId}: "${endnoteText}" with value: "${endnoteValue}"`);
+                // Get the correct endnote text from the global manager
+                let endnoteText = '';
+                let endnoteValue = '';
+                
+                if (window.endnoteManager && window.endnoteManager.endnotes.has(footnoteId)) {
+                  const savedEndnote = window.endnoteManager.endnotes.get(footnoteId);
+                  endnoteText = savedEndnote.text;
+                  endnoteValue = savedEndnote.value;
+                  console.log(`Using saved endnote data: "${endnoteText}" with value: "${endnoteValue}"`);
+                } else {
+                  // Fallback: try to find from getAllEndnotes if not in Map yet
+                  const allEndnotes = window.endnoteManager ? window.endnoteManager.getAllEndnotes() : [];
+                  const existingEndnote = allEndnotes.find(e => e.index === footnoteId);
+                  if (existingEndnote) {
+                    endnoteText = existingEndnote.text;
+                    endnoteValue = existingEndnote.value;
+                    console.log(`Using existing endnote data: "${endnoteText}" with value: "${endnoteValue}"`);
+                  } else {
+                    // Last resort fallback: extract from context (but this should rarely happen)
+                    const words = fullText.trim().split(/\s+/);
+                    endnoteText = words[words.length - 1].replace(/[.,!?;:]$/, '');
+                    console.log(`Fallback: extracted "${endnoteText}" from context`);
+                  }
                 }
                 
-                // Try to convert to proper EndnoteNode
-                try {
-                  const endnoteValue = window.endnoteManager?.endnotes.get(footnoteId)?.value || '';
-                  const endnoteNode = $createEndnoteNode(endnoteText, footnoteId, endnoteValue);
+                console.log(`Processing HTML endnote ID ${footnoteId}: looking for "${endnoteText}" in "${fullText}"`);
+                
+                // Find where the endnote text appears in the full text
+                const endnoteIndex = fullText.lastIndexOf(endnoteText);
+                
+                if (endnoteIndex !== -1) {
+                  // Found the endnote text within the full text
+                  const beforeText = fullText.substring(0, endnoteIndex);
+                  const afterTextStart = endnoteIndex + endnoteText.length;
+                  const afterText = afterTextStart < fullText.length ? fullText.substring(afterTextStart) : '';
                   
-                  // Replace the text node and remove the superscript
-                  child.replace(endnoteNode);
-                  nextChild.remove();
+                  console.log(`Split text: "${beforeText}" + endnote("${endnoteText}") + "${afterText}"`);
                   
-                  console.log(`Successfully converted HTML endnote to EndnoteNode: "${endnoteText}[${footnoteId}]"`);
-                  hasChanges = true;
+                  // Register with global endnote manager if not already present
+                  if (window.endnoteManager && !window.endnoteManager.endnotes.has(footnoteId)) {
+                    window.endnoteManager.addEndnote(footnoteId, endnoteText, endnoteValue, `endnote-ref-${footnoteId}`);
+                    console.log(`Registered HTML endnote ${footnoteId}: "${endnoteText}"`);
+                  }
                   
-                  // Skip the next child since we removed it
-                  i++;
-                  
-                } catch (error) {
-                  console.error('Error creating EndnoteNode from HTML:', error);
-                  // Fallback: combine text and superscript into single text node
-                  const combinedText = `${endnoteText}[${footnoteId}]`;
-                  const newTextNode = $createTextNode(combinedText);
-                  child.replace(newTextNode);
-                  nextChild.remove();
-                  hasChanges = true;
-                  i++;
+                  try {
+                    const newNodes = [];
+                    
+                    // Add text before endnote (if any)
+                    if (beforeText) {
+                      newNodes.push($createTextNode(beforeText));
+                    }
+                    
+                    // Add the EndnoteNode
+                    const endnoteNode = $createEndnoteNode(endnoteText, footnoteId, endnoteValue);
+                    newNodes.push(endnoteNode);
+                    
+                    // Add text after endnote (if any) - this would be rare but handle it
+                    if (afterText.trim()) {
+                      newNodes.push($createTextNode(afterText));
+                    }
+                    
+                    // Replace the original text node with the new nodes
+                    if (newNodes.length > 0) {
+                      child.replace(newNodes[0]);
+                      for (let j = 1; j < newNodes.length; j++) {
+                        newNodes[j - 1].insertAfter(newNodes[j]);
+                      }
+                    }
+                    
+                    // Remove the superscript element
+                    nextChild.remove();
+                    
+                    console.log(`Successfully converted to EndnoteNode: "${endnoteText}[${footnoteId}]"`);
+                    hasChanges = true;
+                    i++; // Skip next child since we removed it
+                    
+                  } catch (error) {
+                    console.error('Error creating EndnoteNode:', error);
+                    // Fallback: convert to text pattern
+                    const combinedText = `${fullText}[${footnoteId}]`;
+                    const newTextNode = $createTextNode(combinedText);
+                    child.replace(newTextNode);
+                    nextChild.remove();
+                    hasChanges = true;
+                    i++;
+                  }
+                } else {
+                  console.warn(`Could not find endnote text "${endnoteText}" in full text "${fullText}"`);
+                  // Fallback: treat entire text as endnote
+                  try {
+                    const endnoteNode = $createEndnoteNode(fullText.trim(), footnoteId, endnoteValue);
+                    child.replace(endnoteNode);
+                    nextChild.remove();
+                    console.log(`Fallback: converted entire text to EndnoteNode: "${fullText}[${footnoteId}]"`);
+                    hasChanges = true;
+                    i++;
+                  } catch (error) {
+                    console.error('Error in fallback EndnoteNode creation:', error);
+                    const combinedText = `${fullText}[${footnoteId}]`;
+                    const newTextNode = $createTextNode(combinedText);
+                    child.replace(newTextNode);
+                    nextChild.remove();
+                    hasChanges = true;
+                    i++;
+                  }
                 }
               }
             }
