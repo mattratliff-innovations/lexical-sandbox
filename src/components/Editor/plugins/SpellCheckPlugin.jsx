@@ -165,13 +165,10 @@ export function SpellCheckPlugin() {
     elementRef: null // Add reference to the DOM element
   });
 
-  console.log('spell check plugin')
   const languageToolService = new LanguageToolService();
 
   // Handle clicks on spell check errors
   const handleSpellCheckClick = useCallback((event) => {
-
-    console.log('spell checking')
     const target = event.target;
     if (target && target.classList.contains('spell-check-error')) {
       event.preventDefault();
@@ -187,9 +184,6 @@ export function SpellCheckPlugin() {
               const rect = target.getBoundingClientRect();
               const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
               const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
-              
-              console.log('SpellCheck: Found node with key:', nodeKey, 'text:', node.getTextContent());
-              
               setModalState({
                 isVisible: true,
                 nodeKey: nodeKey,
@@ -229,20 +223,16 @@ export function SpellCheckPlugin() {
   const applySuggestion = useCallback((suggestion) => {
     if (!modalState.nodeKey) return;
     
-    console.log('SpellCheck: Applying suggestion:', suggestion, 'to node:', modalState.nodeKey);
-    
     editor.update(() => {
       let replaced = false;
       
       // Method 1: Try to find by node key
       try {
         const node = $getNodeByKey(modalState.nodeKey);
-        console.log('SpellCheck: Found node for replacement:', node, 'isSpellCheckNode:', $isSpellCheckNode(node));
         
         if (node && $isSpellCheckNode(node)) {
           const textNode = $createTextNode(suggestion);
           node.replace(textNode);
-          console.log('SpellCheck: Successfully replaced node with suggestion');
           replaced = true;
           
           // Force a re-render by selecting the new node
@@ -276,7 +266,6 @@ export function SpellCheckPlugin() {
           };
           
           if (findNodeByKey(root) && foundNode && $isSpellCheckNode(foundNode)) {
-            console.log('SpellCheck: Found node via tree traversal');
             const textNode = $createTextNode(suggestion);
             foundNode.replace(textNode);
             replaced = true;
@@ -300,7 +289,6 @@ export function SpellCheckPlugin() {
             if ($isSpellCheckNode(node) && node.getTextContent() === modalState.originalText) {
               const textNode = $createTextNode(suggestion);
               node.replace(textNode);
-              console.log('SpellCheck: Successfully replaced via text matching');
               return true;
             }
             
@@ -398,12 +386,9 @@ export function SpellCheckPlugin() {
     const performSpellCheck = async () => {
       if (!editor.isEditable()) return;
 
-      console.log('performing spell checking')
       editor.read(() => {
         const selection = $getSelection();
         if (!$isRangeSelection(selection)) return;
-
-        console.log('has selection')
 
         const root = $getRoot();
         if (!root) return;
@@ -636,19 +621,3 @@ export function SpellCheckPlugin() {
 export function useSpellCheckPlugin() {
   return SpellCheckPlugin;
 }
-
-// CSS styles for spell check errors
-const styles = `
-.spell-check-error {
-  text-decoration: underline;
-  text-decoration-color: red;
-  text-decoration-style: wavy;
-  cursor: pointer;
-}
-
-.spell-check-error:hover {
-  background-color: rgba(255, 0, 0, 0.1);
-}
-`;
-
-export { styles as spellCheckStyles };
