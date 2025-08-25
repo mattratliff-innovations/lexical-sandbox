@@ -2,7 +2,7 @@
 /* eslint-disable no-shadow */
 /* eslint-disable object-shorthand */
 /* eslint-disable class-methods-use-this */
-// SpellCheckPlugin.js
+// SpellCheckPlugin.js with JWT Authentication
 import {
   $createTextNode,
   $getSelection,
@@ -28,12 +28,96 @@ export function $isElementNode(node) {
   return node && typeof node.getChildren === 'function';
 }
 
-// LanguageTool API service
+// Enhanced LanguageTool API service with JWT authentication
 class LanguageToolService {
   constructor() {
-    // replace this URL with the hosted URL of the spellchecker
-    this.apiUrl = 'http://localhost:8010/v2/check';
+    // Use your application's backend endpoint instead of direct LanguageTool
+    this.apiUrl = '/api/spellcheck'; // Your backend endpoint
     this.cache = new Map();
+    this.authToken = null;
+    this.tokenExpiry = null;
+  }
+
+  // Get JWT token from your application's auth system
+  getAuthToken() {
+    // Option 1: Get from localStorage/sessionStorage
+    const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
+    
+    // Option 2: Get from a context/hook (uncomment if using React context)
+    // const { token } = useAuth(); // Your auth hook
+    
+    // Option 3: Get from cookies
+    // const token = document.cookie.split('; ').find(row => row.startsWith('authToken='))?.split('=')[1];
+    
+    return token;
+  }
+
+  // Check if token is valid and not expired
+  isTokenValid(token) {
+    if (!token) return false;
+    
+    try {
+      // Decode JWT payload (basic check - you might want more robust validation)
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      const currentTime = Math.floor(Date.now() / 1000);
+      
+      // Check if token is expired (with 30 second buffer)
+      return payload.exp && payload.exp > (currentTime + 30);
+    } catch (error) {
+      console.error('Token validation error:', error);
+      return false;
+    }
+  }
+
+  // Refresh token if needed
+  async refreshTokenIfNeeded() {
+    const currentToken = this.getAuthToken();
+    
+    if (!this.isTokenValid(currentToken)) {
+      try {
+        // Call your refresh endpoint
+        const response = await fetch('/api/auth/refresh', {
+          method: 'POST',
+          credentials: 'include', // Include cookies for refresh token
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          // Store new token
+          localStorage.setItem('authToken', data.token);
+          // Or dispatch to your auth context
+          // updateAuthToken(data.token);
+          return data.token;
+        } else {
+          // Redirect to login or handle authentication failure
+          this.handleAuthFailure();
+          return null;
+        }
+      } catch (error) {
+        console.error('Token refresh failed:', error);
+        this.handleAuthFailure();
+        return null;
+      }
+    }
+    
+    return currentToken;
+  }
+
+  // Handle authentication failure
+  handleAuthFailure() {
+    // Clear stored tokens
+    localStorage.removeItem('authToken');
+    sessionStorage.removeItem('authToken');
+    
+    // Redirect to login or show login modal
+    // window.location.href = '/login';
+    // Or dispatch to your auth system
+    // logout();
+    
+    console.error('Authentication failed - spell check disabled');
   }
 
   async checkText(text) {
@@ -43,17 +127,33 @@ class LanguageToolService {
     }
 
     try {
+      // Get valid token
+      const token = await this.refreshTokenIfNeeded();
+      if (!token) {
+        console.warn('No valid authentication token - spell check disabled');
+        return [];
+      }
+
       const response = await fetch(this.apiUrl, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
         },
-        body: new URLSearchParams({
+        credentials: 'include', // Include cookies if needed
+        body: JSON.stringify({
           text,
           language: 'en-US',
-          enabledOnly: 'false',
+          enabledOnly: false,
         }),
       });
+
+      if (response.status === 401) {
+        // Token expired or invalid
+        console.warn('Authentication failed - attempting token refresh');
+        this.handleAuthFailure();
+        return [];
+      }
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -63,21 +163,31 @@ class LanguageToolService {
       const result = this.processLanguageToolResponse(data);
 
       this.cache.set(cacheKey, result);
-
       return result;
     } catch (error) {
-      console.error('LanguageTool API error:', error);
+      console.error('Spell check API error:', error);
+      
+      // Check if it's an authentication error
+      if (error.message.includes('401') || error.message.includes('Unauthorized')) {
+        this.handleAuthFailure();
+      }
+      
       return [];
     }
   }
 
   processLanguageToolResponse(data) {
-    return data.matches.map((match) => ({
+    // Handle both direct LanguageTool response and your backend wrapper
+    const matches = data.matches || data.errors || [];
+    
+    return matches.map((match) => ({
       offset: match.offset,
       length: match.length,
-      word: match.context.text.substring(match.offset, match.offset + match.length),
-      suggestions: match.replacements.map((r) => r.value).slice(0, 5),
-      message: match.message,
+      word: match.context?.text?.substring(match.offset, match.offset + match.length) || match.word,
+      suggestions: (match.replacements || match.suggestions || [])
+        .map((r) => r.value || r)
+        .slice(0, 5),
+      message: match.message || 'Possible spelling error',
     }));
   }
 
@@ -94,7 +204,7 @@ export function SpellCheckPlugin() {
     originalText: '',
     suggestions: [],
     position: { x: 0, y: 0 },
-    elementRef: null, // Add reference to the DOM element
+    elementRef: null,
   });
 
   const languageToolService = new LanguageToolService();
@@ -109,7 +219,6 @@ export function SpellCheckPlugin() {
 
         const nodeKey = target.getAttribute('data-lexical-spell-check');
         if (nodeKey) {
-          // Get node data within editor context
           editor.read(() => {
             try {
               const node = $getNodeByKey(nodeKey);
@@ -122,7 +231,7 @@ export function SpellCheckPlugin() {
                   nodeKey: nodeKey,
                   originalText: node.getTextContent(),
                   suggestions: node.getSuggestions(),
-                  elementRef: target, // Store reference to the DOM element
+                  elementRef: target,
                   position: {
                     x: rect.left + scrollLeft + rect.width / 2,
                     y: rect.bottom + scrollTop + 5,
@@ -258,7 +367,6 @@ export function SpellCheckPlugin() {
           const textNode = $createTextNode(node.getTextContent());
           node.replace(textNode);
 
-          // Force a re-render by selecting the new node
           const selection = $getSelection();
           if ($isRangeSelection(selection)) {
             textNode.select();
@@ -269,7 +377,6 @@ export function SpellCheckPlugin() {
       } catch (error) {
         console.warn('Could not ignore spelling error:', error);
 
-        // Fallback: try to find the node by traversing the tree
         try {
           const root = $getRoot();
           let foundNode = null;
@@ -290,7 +397,6 @@ export function SpellCheckPlugin() {
             const textNode = $createTextNode(foundNode.getTextContent());
             foundNode.replace(textNode);
 
-            // Force a re-render by selecting the new node
             const selection = $getSelection();
             if ($isRangeSelection(selection)) {
               textNode.select();
@@ -355,7 +461,6 @@ export function SpellCheckPlugin() {
                   });
                 }
 
-                // Only traverse children if this is an ElementNode
                 if ($isElementNode(node)) {
                   try {
                     const children = node.getChildren();
@@ -392,22 +497,18 @@ export function SpellCheckPlugin() {
     const handleTyping = () => {
       isTyping = true;
 
-      // Clear existing typing timeout
       if (typingTimeout) {
         clearTimeout(typingTimeout);
       }
 
-      // Set user as not typing after 1000ms of inactivity
       typingTimeout = setTimeout(() => {
         isTyping = false;
-        performSpellCheck(); // Check spelling after user stops typing
+        performSpellCheck();
       }, 1000);
     };
 
     const applySpellCheckHighlights = (root, errors) => {
       const allTextNodes = [];
-
-      // Collect all text nodes with their positions
       let currentOffset = 0;
 
       const collectTextNodes = (node) => {
@@ -422,7 +523,6 @@ export function SpellCheckPlugin() {
           currentOffset += text.length;
         }
 
-        // Only traverse children if this is an ElementNode
         if ($isElementNode(node)) {
           try {
             const children = node.getChildren();
@@ -440,7 +540,6 @@ export function SpellCheckPlugin() {
         const errorStart = error.offset;
         const errorEnd = error.offset + error.length;
 
-        // Find the text node that contains this error
         allTextNodes.find((textNodeInfo) => {
           if (errorStart >= textNodeInfo.startOffset && errorEnd <= textNodeInfo.endOffset) {
             const relativeStart = errorStart - textNodeInfo.startOffset;
@@ -451,9 +550,9 @@ export function SpellCheckPlugin() {
             } catch (error) {
               console.warn('Could not highlight error in node:', error);
             }
-            return true; // Stop iteration once the condition is met
+            return true;
           }
-          return false; // Continue iteration
+          return false;
         });
       });
     };
@@ -476,7 +575,6 @@ export function SpellCheckPlugin() {
         nodes.push($createTextNode(afterText));
       }
 
-      // Replace the original node with the new nodes
       if (nodes.length > 0) {
         try {
           node.replace(nodes[0]);
@@ -494,7 +592,7 @@ export function SpellCheckPlugin() {
       editor.registerUpdateListener(({ editorState }) => {
         try {
           editorState.read(() => {
-            handleTyping(); // Mark as typing activity
+            handleTyping();
           });
         } catch (error) {
           console.warn('Error in spell check update listener:', error);
@@ -505,7 +603,6 @@ export function SpellCheckPlugin() {
         SELECTION_CHANGE_COMMAND,
         () => {
           try {
-            // Don't mark selection changes as typing
             if (!isTyping) {
               performSpellCheck();
             }
@@ -518,7 +615,6 @@ export function SpellCheckPlugin() {
       )
     );
 
-    // eslint-disable-next-line consistent-return
     return () => {
       [timeoutId, typingTimeout].forEach((timeout) => timeout && clearTimeout(timeout));
       document.removeEventListener('click', handleSpellCheckClick);
