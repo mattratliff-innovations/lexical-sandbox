@@ -1,0 +1,38 @@
+WARNING: unknown option: --maxTextLength
+WARNING: unknown option: 50000
+2025-08-26 15:18:07.698 GMT-04:00 INFO  org.languagetool.server.DatabaseAccessOpenSource Not setting up database access, dbDriver is not configured
+2025-08-26 19:18:07 +0000 WARNING: running in HTTP mode, consider running LanguageTool behind a reverse proxy that takes care of encryption (HTTPS)
+2025-08-26 19:18:07 +0000 WARNING: running in public mode, LanguageTool API can be accessed without restrictions!
+2025-08-26 19:18:07 +0000 Setting up thread pool with 10 threads
+2025-08-26 15:18:08.054 GMT-04:00 WARN  org.languagetool.language.identifier.DefaultLanguageIdentifier fastText not configured - language detection performance will be degraded. See https://dev.languagetool.org/http-server#starting-from-command-line for instructions.
+2025-08-26 15:18:08.056 GMT-04:00 INFO  org.languagetool.server.TextChecker A/B-Test enabled: []
+2025-08-26 19:18:08 +0000 Starting LanguageTool 6.7-SNAPSHOT (build date: 2025-07-08 18:50:16 +0200, ca96db2) server on http://localhost:8081...
+2025-08-26 19:18:08 +0000 Server started
+2025-08-26 15:18:37.793 GMT-04:00 INFO  org.languagetool.server.LanguageToolHttpHandler Handling POST /v2/check
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.google.common.util.concurrent.AbstractFuture$UnsafeAtomicHelper (file:/Users/Matt.Ratliff/Development/spell-checker/languagetool/libs/guava.jar)
+WARNING: Please consider reporting this to the maintainers of class com.google.common.util.concurrent.AbstractFuture$UnsafeAtomicHelper
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+2025-08-26 15:18:39.175 GMT-04:00 INFO  org.languagetool.server.TextChecker Check done: 4 chars, en-US, requestId: null, #1, null, 0/0 matches, 1369ms, agent:-, sent, q:0, h:1, dH:1, r:1, m:all, premium: false
+2025-08-26 15:18:39.176 GMT-04:00 INFO  org.languagetool.server.LanguageToolHttpHandler Handled request in 1391ms; sending code 200
+2025-08-26 15:20:09.508 GMT-04:00 INFO  org.languagetool.server.LanguageToolHttpHandler Handling POST /v2/check
+2025-08-26 15:20:09.598 GMT-04:00 INFO  org.languagetool.server.TextChecker Check done: 63 chars, en-US, requestId: null, #2, null, 0/1 matches, 89ms, agent:-, sent, q:0, h:1, dH:1, r:2, m:all, premium: false
+2025-08-26 15:20:09.598 GMT-04:00 INFO  org.languagetool.server.LanguageToolHttpHandler Handled request in 90ms; sending code 200
+2025-08-26 15:21:21.445 GMT-04:00 INFO  org.languagetool.server.LanguageToolHttpHandler Handling POST /v2/check
+2025-08-26 15:21:21.465 GMT-04:00 INFO  org.languagetool.server.TextChecker Check done: 19 chars, en-US, requestId: null, #3, null, 0/0 matches, 18ms, agent:-, sent, q:0, h:1, dH:1, r:3, m:all, premium: false
+2025-08-26 15:21:21.465 GMT-04:00 INFO  org.languagetool.server.LanguageToolHttpHandler Handled request in 20ms; sending code 200
+2025-08-26 15:21:44.348 GMT-04:00 INFO  org.languagetool.server.LanguageToolHttpHandler Handling POST /v2/check
+2025-08-26 15:21:44.369 GMT-04:00 INFO  org.languagetool.server.TextChecker Check done: 13 chars, en-US, requestId: null, #4, null, 0/1 matches, 21ms, agent:-, sent, q:0, h:1, dH:1, r:4, m:all, premium: false
+2025-08-26 15:21:44.370 GMT-04:00 INFO  org.languagetool.server.LanguageToolHttpHandler Handled request in 22ms; sending code 200
+2025-08-26 15:49:47.539 GMT-04:00 INFO  org.languagetool.server.LanguageToolHttpHandler Handling POST /v2/check
+2025-08-26 15:49:47.573 GMT-04:00 INFO  org.languagetool.server.TextChecker Check done: 36 chars, en-US, requestId: null, #5, null, 0/1 matches, 34ms, agent:-, sent, q:0, h:1, dH:1, r:5, m:all, premium: false
+2025-08-26 15:49:47.573 GMT-04:00 INFO  org.languagetool.server.LanguageToolHttpHandler Handled request in 34ms; sending code 200
+2025-08-27 08:28:15.302 GMT-04:00 INFO  org.languagetool.server.LanguageToolHttpHandler Handling POST /v2/check
+2025-08-27 08:28:15.335 GMT-04:00 INFO  org.languagetool.server.TextChecker Check done: 36 chars, en-US, requestId: null, #6, null, 0/1 matches, 32ms, agent:-, sent, q:0, h:1, dH:1, r:6, m:all, premium: false
+2025-08-27 08:28:15.335 GMT-04:00 INFO  org.languagetool.server.LanguageToolHttpHandler Handled request in 33ms; sending code 200
+2025-08-27 09:39:04.660 GMT-04:00 INFO  org.languagetool.server.LanguageToolHttpHandler Handling POST /v2/check
+2025-08-27 09:39:04.683 GMT-04:00 INFO  org.languagetool.server.TextChecker Check done: 4 chars, en-US, requestId: null, #7, null, 0/0 matches, 23ms, agent:-, sent, q:0, h:1, dH:1, r:7, m:all, premium: false
+2025-08-27 09:39:04.683 GMT-04:00 INFO  org.languagetool.server.LanguageToolHttpHandler Handled request in 23ms; sending code 200
+2025-08-27 09:41:33.970 GMT-04:00 INFO  org.languagetool.server.LanguageToolHttpHandler Handling POST /v2/check
+2025-08-27 09:41:33.987 GMT-04:00 INFO  org.languagetool.server.TextChecker Check done: 24 chars, en-US, requestId: null, #8, null, 0/1 matches, 17ms, agent:-, sent, q:0, h:1, dH:1, r:8, m:all, premium: false
+2025-08-27 09:41:33.987 GMT-04:00 INFO  org.languagetool.server.LanguageToolHttpHandler Handled request in 17ms; sending code 200
