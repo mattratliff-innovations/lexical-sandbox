@@ -33,10 +33,11 @@ export function $isElementNode(node) {
 }
 
 // LanguageTool API service
+// In your LanguageToolService class
 class LanguageToolService {
   constructor() {
-    // replace this URL with the hosted URL of the spellchecker
-    this.apiUrl = 'http://localhost:8010/v2/check';
+    // Use the authenticated endpoint instead of direct LanguageTool
+    this.apiUrl = 'http://localhost:8010/v2/check'; // Changed from localhost:8081
     this.cache = new Map();
   }
 
@@ -47,52 +48,35 @@ class LanguageToolService {
     }
 
     try {
+      // Use your existing authenticated axios instance
       const axios = createAuthenticatedAxios();
-      axios
-        .get(this.apiUrl, {
-          method: 'POST',
-          headers: {
-            ...axios.defaults.headers,
-            'Content-Type': 'application/x-www-form-urlencoded',
-          },
-          body: new URLSearchParams({
-            text,
-            language: 'en-US',
-            enabledOnly: 'false',
-          }),
-        })
-        .then(async (response) => {
-          if (!response.ok) {
-            console.error(`HTTP error! status: ${response.status}`);
-          }
-          const data = await response.json();
-          const result = this.processLanguageToolResponse(data);
-
-          this.cache.set(cacheKey, result);
-
-          return result;
-        })
-        .catch((response) => {
-          console.error(`HTTP error! status: ${response.status}`);
-        });
+      
+      const formData = new URLSearchParams();
+      formData.append('text', text);
+      formData.append('language', 'en-US');
+      formData.append('enabledOnly', 'false');
+      
+      const response = await axios.post(this.apiUrl, formData, {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+      });
+      
+      const result = this.processLanguageToolResponse(response.data);
+      this.cache.set(cacheKey, result);
+      return result;
+      
     } catch (error) {
       console.error('LanguageTool API error:', error);
+      
+      if (error.response?.status === 401) {
+        console.error('Authentication failed - JWT token may be expired');
+      } else if (error.response?.status === 403) {
+        console.error('Access forbidden - user may lack spellcheck permissions');
+      }
+      
+      return [];
     }
-    return [];
-  }
-
-  processLanguageToolResponse(data) {
-    return data.matches.map((match) => ({
-      offset: match.offset,
-      length: match.length,
-      word: match.context.text.substring(match.offset, match.offset + match.length),
-      suggestions: match.replacements.map((r) => r.value).slice(0, 5),
-      message: match.message,
-    }));
-  }
-
-  clearCache() {
-    this.cache.clear();
   }
 }
 
