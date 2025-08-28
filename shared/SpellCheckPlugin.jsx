@@ -33,11 +33,10 @@ export function $isElementNode(node) {
 }
 
 // LanguageTool API service
-// In your LanguageToolService class
 class LanguageToolService {
   constructor() {
-    // Use the authenticated endpoint instead of direct LanguageTool
-    this.apiUrl = 'http://localhost:8010/v2/check'; // Changed from localhost:8081
+    // Use the nginx proxy endpoint that should handle CORS
+    this.apiUrl = 'http://localhost:8010/v2/check';
     this.cache = new Map();
   }
 
@@ -48,35 +47,55 @@ class LanguageToolService {
     }
 
     try {
-      // Use your existing authenticated axios instance
-      const axios = createAuthenticatedAxios();
-      
+      // Create form data for the POST request
       const formData = new URLSearchParams();
       formData.append('text', text);
       formData.append('language', 'en-US');
       formData.append('enabledOnly', 'false');
-      
-      const response = await axios.post(this.apiUrl, formData, {
+
+      // Use fetch instead of axios for better CORS handling
+      const response = await fetch(this.apiUrl, {
+        method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
+          // Don't include Authorization header for external API
         },
+        body: formData,
       });
-      
-      const result = this.processLanguageToolResponse(response.data);
+
+      if (!response.ok) {
+        console.error(`HTTP error! status: ${response.status}`);
+        return [];
+      }
+
+      const data = await response.json();
+      const result = this.processLanguageToolResponse(data);
+
       this.cache.set(cacheKey, result);
       return result;
-      
+
     } catch (error) {
       console.error('LanguageTool API error:', error);
-      
-      if (error.response?.status === 401) {
-        console.error('Authentication failed - JWT token may be expired');
-      } else if (error.response?.status === 403) {
-        console.error('Access forbidden - user may lack spellcheck permissions');
-      }
-      
       return [];
     }
+  }
+
+  processLanguageToolResponse(data) {
+    if (!data || !data.matches) {
+      return [];
+    }
+    
+    return data.matches.map((match) => ({
+      offset: match.offset,
+      length: match.length,
+      word: match.context.text.substring(match.offset, match.offset + match.length),
+      suggestions: match.replacements ? match.replacements.map((r) => r.value).slice(0, 5) : [],
+      message: match.message || 'Spelling error',
+    }));
+  }
+
+  clearCache() {
+    this.cache.clear();
   }
 }
 
