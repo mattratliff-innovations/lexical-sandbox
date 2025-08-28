@@ -1,139 +1,94 @@
 #!/bin/bash
 
-# Check if LanguageTool itself is adding CORS headers
+echo "Testing CORS configuration..."
 
-echo "🔍 Checking LanguageTool CORS Headers"
-echo "====================================="
-echo ""
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
 
-echo "This will help determine if the duplicate CORS headers are coming from:"
-echo "1. nginx configuration (our proxy)"
-echo "2. LanguageTool server itself"
-echo ""
+# Test direct LanguageTool server (should have no CORS headers)
+echo "Testing LanguageTool directly (port 8081):"
+lt_direct_cors=$(curl -s -I "http://localhost:8081/v2/check" | grep -i "access-control" | wc -l)
+echo "LanguageTool CORS headers: $lt_direct_cors (should be 0)"
 
-# Test direct LanguageTool access (bypassing nginx)
-echo "📋 Testing LanguageTool directly (port 8081, no nginx):"
-echo "======================================================"
-
-if curl -s -f -X POST -H "Content-Type: application/x-www-form-urlencoded" -d "text=test&language=en-US" http://localhost:8081/v2/check > /dev/null; then
-    echo "✅ LanguageTool is responding on port 8081"
-    
-    # Check CORS headers from direct LanguageTool access
-    echo ""
-    echo "🔍 CORS headers from LanguageTool directly:"
-    
-    DIRECT_RESPONSE=$(curl -s -I -X POST \
-        -H "Origin: http://localhost:3080" \
-        -H "Content-Type: application/x-www-form-urlencoded" \
-        http://localhost:8081/v2/check 2>/dev/null)
-    
-    echo "---"
-    echo "$DIRECT_RESPONSE" | grep -i "access-control" || echo "No CORS headers from LanguageTool"
-    echo "---"
-    
-    DIRECT_CORS_COUNT=$(echo "$DIRECT_RESPONSE" | grep -i "access-control-allow-origin" | wc -l | tr -d ' ')
-    
-    if [ "$DIRECT_CORS_COUNT" -gt 0 ]; then
-        echo "⚠️  LanguageTool is adding $DIRECT_CORS_COUNT CORS header(s)"
-        echo "💡 This could be the source of duplicates when combined with nginx"
-    else
-        echo "✅ LanguageTool is not adding CORS headers (good)"
-    fi
-    
+if [ $lt_direct_cors -eq 0 ]; then
+    echo -e "${GREEN}✓ LanguageTool correctly has no CORS headers${NC}"
 else
-    echo "❌ LanguageTool is not responding on port 8081"
-    echo "💡 Start LanguageTool first to test"
+    echo -e "${YELLOW}⚠ LanguageTool unexpectedly has CORS headers${NC}"
 fi
 
 echo ""
 
-# Test nginx proxy access
-echo "📋 Testing nginx proxy (port 8010):"
-echo "==================================="
+# Test nginx proxy (should have CORS headers)
+echo "Testing nginx proxy (port 8010):"
+nginx_cors=$(curl -s -I "http://localhost:8010/v2/check" | grep -i "access-control" | wc -l)
+echo "nginx CORS headers: $nginx_cors (should be > 0)"
 
-if curl -s -f http://localhost:8010/health > /dev/null; then
-    echo "✅ nginx proxy is responding on port 8010"
-    
-    echo ""
-    echo "🔍 CORS headers from nginx proxy:"
-    
-    PROXY_RESPONSE=$(curl -s -I -X OPTIONS \
-        -H "Origin: http://localhost:3080" \
-        -H "Access-Control-Request-Method: POST" \
-        -H "Access-Control-Request-Headers: Authorization, Content-Type" \
-        http://localhost:8010/v2/check 2>/dev/null)
-    
-    echo "---"
-    echo "$PROXY_RESPONSE" | grep -i "access-control" || echo "No CORS headers from nginx"
-    echo "---"
-    
-    PROXY_CORS_COUNT=$(echo "$PROXY_RESPONSE" | grep -i "access-control-allow-origin" | wc -l | tr -d ' ')
-    
-    if [ "$PROXY_CORS_COUNT" -gt 1 ]; then
-        echo "❌ nginx is adding $PROXY_CORS_COUNT CORS headers (should be 1)"
-    elif [ "$PROXY_CORS_COUNT" = 1 ]; then
-        echo "✅ nginx is adding exactly 1 CORS header (correct)"
-    else
-        echo "⚠️  nginx is not adding CORS headers"
-    fi
-    
+if [ $nginx_cors -gt 0 ]; then
+    echo -e "${GREEN}✓ nginx correctly adds CORS headers${NC}"
+    echo "CORS headers found:"
+    curl -s -I "http://localhost:8010/v2/check" | grep -i "access-control"
 else
-    echo "❌ nginx proxy is not responding on port 8010"
-    echo "💡 Start nginx first: sudo nginx -c $(pwd)/nginx/nginx.conf"
+    echo -e "${RED}✗ nginx is not adding CORS headers${NC}"
+    echo "Response headers:"
+    curl -s -I "http://localhost:8010/v2/check"
 fi
 
 echo ""
 
-# Compare both
-echo "📊 Comparison:"
-echo "=============="
-echo "Direct LanguageTool (8081): $DIRECT_CORS_COUNT CORS headers"
-echo "nginx Proxy (8010): $PROXY_CORS_COUNT CORS headers"
+# Test OPTIONS request (preflight)
+echo "Testing CORS preflight (OPTIONS request):"
+options_response=$(curl -s -I -X OPTIONS "http://localhost:8010/v2/check" \
+    -H "Origin: http://localhost:3000" \
+    -H "Access-Control-Request-Method: POST" \
+    -H "Access-Control-Request-Headers: Content-Type")
 
-if [ "$DIRECT_CORS_COUNT" -gt 0 ] && [ "$PROXY_CORS_COUNT" -gt 0 ]; then
-    echo ""
-    echo "❌ PROBLEM IDENTIFIED:"
-    echo "   Both LanguageTool AND nginx are adding CORS headers"
-    echo "   This causes duplication: LanguageTool adds headers, then nginx adds more"
-    echo ""
-    echo "🔧 SOLUTION:"
-    echo "   Option 1: Configure nginx to NOT add CORS headers (let LanguageTool handle it)"
-    echo "   Option 2: Configure LanguageTool to NOT add CORS headers (let nginx handle it)"
-    echo "   Option 3: Use nginx proxy_hide_header to remove LanguageTool's CORS headers"
-    echo ""
-    echo "💡 Recommended: Let nginx handle CORS (Option 2)"
-    
-elif [ "$DIRECT_CORS_COUNT" -gt 1 ]; then
-    echo ""
-    echo "❌ PROBLEM: LanguageTool itself is adding multiple CORS headers"
-    echo "💡 Check LanguageTool configuration or startup parameters"
-    
-elif [ "$PROXY_CORS_COUNT" -gt 1 ]; then
-    echo ""
-    echo "❌ PROBLEM: nginx configuration is adding multiple CORS headers"
-    echo "💡 Check nginx.conf for duplicate add_header directives"
-    
+options_cors=$(echo "$options_response" | grep -i "access-control" | wc -l)
+echo "OPTIONS CORS headers: $options_cors (should be > 0)"
+
+if [ $options_cors -gt 0 ]; then
+    echo -e "${GREEN}✓ OPTIONS preflight correctly handled${NC}"
+    echo "Preflight headers:"
+    echo "$options_response" | grep -i "access-control"
 else
-    echo ""
-    echo "✅ CORS headers look correct individually"
-    echo "💡 The issue might be in how they combine or browser caching"
+    echo -e "${RED}✗ OPTIONS preflight not working${NC}"
+    echo "OPTIONS response:"
+    echo "$options_response"
 fi
 
 echo ""
-echo "🔧 Next Steps:"
-echo "=============="
 
-if [ "$DIRECT_CORS_COUNT" -gt 0 ]; then
-    echo "1. Disable CORS in LanguageTool (recommended)"
-    echo "   • Remove --allow-origin parameter when starting LanguageTool"
-    echo "   • Let nginx handle all CORS"
+# Test actual POST request
+echo "Testing actual POST request with CORS:"
+post_response=$(curl -s -i -X POST "http://localhost:8010/v2/check" \
+    -H "Content-Type: application/x-www-form-urlencoded" \
+    -H "Origin: http://localhost:3000" \
+    -d "text=This is a tesst text&language=en-US")
+
+post_cors=$(echo "$post_response" | grep -i "access-control" | wc -l)
+post_status=$(echo "$post_response" | head -n1 | grep -o '[0-9][0-9][0-9]')
+
+echo "POST request status: $post_status"
+echo "POST CORS headers: $post_cors (should be > 0)"
+
+if [ "$post_status" = "200" ] && [ $post_cors -gt 0 ]; then
+    echo -e "${GREEN}✓ POST request with CORS working correctly${NC}"
+    echo "POST CORS headers:"
+    echo "$post_response" | grep -i "access-control"
+else
+    echo -e "${RED}✗ POST request with CORS failed${NC}"
+    echo "Full POST response:"
+    echo "$post_response"
 fi
 
-echo "2. Clear browser cache completely"
-echo "3. Test with curl to verify headers"
-echo "4. Test with browser developer tools"
-
 echo ""
-echo "📝 Test commands:"
-echo "   Direct LT: curl -I http://localhost:8081/v2/check"
-echo "   Via nginx: curl -I http://localhost:8010/v2/check"
+echo "Testing complete!"
+
+# Summary
+if [ $nginx_cors -gt 0 ] && [ $options_cors -gt 0 ] && [ "$post_status" = "200" ] && [ $post_cors -gt 0 ]; then
+    echo -e "${GREEN}🎉 All CORS tests passed! Your setup is working correctly.${NC}"
+else
+    echo -e "${RED}❌ Some CORS tests failed. Check your nginx configuration.${NC}"
+fi
