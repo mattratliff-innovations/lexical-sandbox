@@ -2,7 +2,6 @@
 /* eslint-disable no-shadow */
 /* eslint-disable object-shorthand */
 /* eslint-disable class-methods-use-this */
-/* eslint no-console: ["error", { allow: ["warn", "error"] }] */
 // SpellCheckPlugin.js
 import { useCallback, useEffect, useState } from 'react';
 
@@ -21,7 +20,6 @@ import {
 
 import { $createSpellCheckNode, SpellCheckNode } from './SpellCheckNode';
 import SpellCheckPluginModal from './SpellCheckPluginModal';
-import { createAuthenticatedAxios } from '../../../../../../../http/authenticatedAxios';
 
 export function $isSpellCheckNode(node) {
   return node instanceof SpellCheckNode;
@@ -135,6 +133,7 @@ export function SpellCheckPlugin() {
                   nodeKey: nodeKey,
                   originalText: node.getTextContent(),
                   suggestions: node.getSuggestions(),
+                  issueType: node.getIssueType(),
                   elementRef: target, // Store reference to the DOM element
                   position: {
                     x: rect.left + scrollLeft + rect.width / 2,
@@ -460,7 +459,7 @@ export function SpellCheckPlugin() {
             const relativeEnd = errorEnd - textNodeInfo.startOffset;
 
             try {
-              highlightErrorInNode(textNodeInfo.node, relativeStart, relativeEnd, error.suggestions);
+              highlightErrorInNode(textNodeInfo.node, relativeStart, relativeEnd, error.suggestions, error.issueType);
             } catch (error) {
               console.warn('Could not highlight error in node:', error);
             }
@@ -471,7 +470,7 @@ export function SpellCheckPlugin() {
       });
     };
 
-    const highlightErrorInNode = (node, start, end, suggestions) => {
+    const highlightErrorInNode = (node, start, end, suggestions, issueType) => {
       const text = node.getTextContent();
       const beforeText = text.substring(0, start);
       const errorText = text.substring(start, end);
@@ -483,7 +482,8 @@ export function SpellCheckPlugin() {
         nodes.push($createTextNode(beforeText));
       }
 
-      nodes.push($createSpellCheckNode(errorText, suggestions));
+      // Create a SpellCheckNode with issueType
+      nodes.push($createSpellCheckNode(errorText, suggestions, issueType || 'unknown')); // Default to 'unknown'
 
       if (afterText) {
         nodes.push($createTextNode(afterText));
@@ -544,6 +544,7 @@ export function SpellCheckPlugin() {
     ? {
         getSuggestions: () => modalState.suggestions,
         getTextContent: () => modalState.originalText,
+        getIssueType: () => modalState.issueType,
       }
     : null;
 
@@ -555,6 +556,7 @@ export function SpellCheckPlugin() {
       position={modalState.position}
       onApplySuggestion={applySuggestion}
       onIgnore={ignoreError}
+      errorType={modalState.errorType}
     />
   );
 }
