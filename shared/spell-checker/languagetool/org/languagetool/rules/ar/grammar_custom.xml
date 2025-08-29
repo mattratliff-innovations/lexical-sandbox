@@ -1,0 +1,10 @@
+<!-- English rule, 2025-07-13 -->
+<rule id="THIS_HERE" name="This here">
+ <pattern case_sensitive='yes'>
+  <token>This</token>
+  <token>here</token>
+ </pattern>
+ <message>The word "here" is not needed and can be removed.</message>
+ <example correction=''><marker>This here</marker> is an example of a grammatical error.</example>
+ <example>This is an example of a grammatical error.</example>
+</rule>
