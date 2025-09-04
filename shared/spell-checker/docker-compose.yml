@@ -1,0 +1,84 @@
+version: '3.8'
+
+services:
+  # LanguageTool service
+  languagetool:
+    build:
+      context: ./languagetool
+      dockerfile: Dockerfile
+    container_name: languagetool-service
+    # Only expose internally to other services
+    expose:
+      - "8010"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8010/v2/languages"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+    networks:
+      - app-network
+    volumes:
+      - languagetool-data:/app/cache
+    environment:
+      - JAVA_OPTS=${JAVA_OPTS:--Xmx2g}
+
+  # JWT Validator service
+  jwt-validator:
+    build:
+      context: ./jwt-validator
+      dockerfile: Dockerfile
+    container_name: jwt-validator-service
+    # Only expose internally to other services
+    expose:
+      - "3000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - app-network
+    environment:
+      - NODE_ENV=production
+      - JWT_SECRET=${JWT_SECRET:-your-secret-key-change-in-production}
+      - JWT_ISSUER=${JWT_ISSUER:-your-application}
+      - JWT_AUDIENCE=${JWT_AUDIENCE:-your-users}
+
+  # Nginx reverse proxy (main entry point)
+  nginx-proxy:
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
+    container_name: nginx-proxy
+    ports:
+      - "8080:80"  # Main entry point for your microservice
+    depends_on:
+      languagetool:
+        condition: service_healthy
+      jwt-validator:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 45s
+    restart: unless-stopped
+    networks:
+      - app-network
+    volumes:
+      - nginx-logs:/var/log/nginx
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  languagetool-data:
+    driver: local
+  nginx-logs:
+    driver: local
