@@ -1,11 +1,11 @@
-import { $applyNodeReplacement } from 'lexical';
+import { $applyNodeReplacement, DecoratorNode } from 'lexical';
 
 import { configureCustomNodeDomImport } from './NodeUtil';
 import { PAGEBREAK_SEARCH_TEXT } from '../../../ScribeDocumentConstants';
 import { $applyCustomNodeConfiguration, ExtendedTextNode } from '../../ExtendedTextNode';
 import { createPageBreakDataFromDom, PAGEBREAK_TYPE, serializeToHtml } from '../nodeDomSerializers/PageBreakSerializer';
 
-class PageBreakNode extends ExtendedTextNode {
+class PageBreakNode extends DecoratorNode {
   __pagebreak;
 
   static getType() {
@@ -13,30 +13,93 @@ class PageBreakNode extends ExtendedTextNode {
   }
 
   static clone(node) {
-    return new PageBreakNode(node.__text, node.__pagebreak, node.__key);
+    return new PageBreakNode(node.__pagebreak, node.__key);
   }
 
-  constructor(text, pagebreakNumber, key) {
-    super(text, key);
-    this.__pagebreak = pagebreakNumber;
+  constructor(pagebreakData, key) {
+    super(key);
+    this.__pagebreak = pagebreakData || '';
   }
 
+  // This creates the DOM element that will be rendered in the editor
+  createDOM(config) {
+    const div = document.createElement('div');
+    div.setAttribute('data-type', 'pagebreak');
+    div.setAttribute('class', 'page-break');
+    div.style.cssText = 'page-break-after: always; height: 1px; border-top: 2px dashed #ccc; margin: 10px 0; position: relative;';
+    
+    // Add visual indicator for the editor
+    const span = document.createElement('span');
+    span.textContent = 'Page Break';
+    span.style.cssText = 'position: absolute; top: -10px; left: 50%; transform: translateX(-50%); background: white; padding: 0 10px; font-size: 12px; color: #666;';
+    div.appendChild(span);
+    
+    return div;
+  }
+
+  // This updates the DOM when the node changes
+  updateDOM(prevNode, dom) {
+    return false; // Return false if no update needed, true if DOM should be replaced
+  }
+
+  // This is what gets rendered in the React component tree
+  decorate() {
+    return (
+      <div 
+        data-type="pagebreak" 
+        className="page-break"
+        style={{
+          pageBreakAfter: 'always',
+          height: '1px',
+          borderTop: '2px dashed #ccc',
+          margin: '10px 0',
+          position: 'relative'
+        }}
+      >
+        <span style={{
+          position: 'absolute',
+          top: '-10px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          background: 'white',
+          padding: '0 10px',
+          fontSize: '12px',
+          color: '#666'
+        }}>
+          Page Break
+        </span>
+      </div>
+    );
+  }
+
+  // For HTML export (when sending to PDF Reactor)
   setHtmlForExport(span) {
-    serializeToHtml(span, this.getpagebreakNumber());
+    // Create the actual page break div for PDF export
+    const div = document.createElement('div');
+    div.setAttribute('data-type', 'pagebreak');
+    div.setAttribute('class', 'page-break');
+    div.style.pageBreakAfter = 'always';
+    
+    span.innerHTML = div.outerHTML;
+    serializeToHtml(span, div.outerHTML);
   }
 
   updateFromDraft(draft) {
     const self = this.getWritable();
-    const div = document.createElement('div'); // Create a div element
-    div.setAttribute('data-type', 'pagebreak'); // Add a custom attribute for identification
+    const div = document.createElement('div');
+    div.setAttribute('data-type', 'pagebreak');
     div.setAttribute('class', 'page-break');
-    div.textContent = 'Page Break'; // Set the content of the div
-    self.__pagebreak = div.outerHTML; // Serialize the div to HTML and store it
-    self.__text = self.__pagebreak;
+    div.style.pageBreakAfter = 'always';
+    
+    self.__pagebreak = div.outerHTML;
   }
 
   showVariable() {
-    this.setTextContent(PAGEBREAK_SEARCH_TEXT);
+    // For editor display when showing variable names
+    const div = document.createElement('div');
+    div.textContent = PAGEBREAK_SEARCH_TEXT;
+    div.setAttribute('class', 'page-break-variable');
+    this.__pagebreak = div.outerHTML;
   }
 
   static importDOM() {
@@ -45,8 +108,7 @@ class PageBreakNode extends ExtendedTextNode {
 
   static createNodeFromDom(domNode) {
     const pagebreak = createPageBreakDataFromDom(domNode);
-    const node = new PageBreakNode(pagebreak, pagebreak);
-    $applyCustomNodeConfiguration(node);
+    const node = new PageBreakNode(pagebreak);
     return $applyNodeReplacement(node);
   }
 
@@ -54,10 +116,14 @@ class PageBreakNode extends ExtendedTextNode {
     return PAGEBREAK_SEARCH_TEXT;
   }
 
-  static createFromEditor(draft, editorisOpen) {
-    const pagebreakNumber = draft.registration?.pagebreakNumber;
-    const result = editorisOpen ? new PageBreakNode(PAGEBREAK_SEARCH_TEXT, pagebreakNumber) : new PageBreakNode(pagebreakNumber, pagebreakNumber);
-    $applyCustomNodeConfiguration(result);
+  static createFromEditor(draft, editorIsOpen) {
+    const div = document.createElement('div');
+    div.setAttribute('data-type', 'pagebreak');
+    div.setAttribute('class', 'page-break');
+    div.style.pageBreakAfter = 'always';
+    
+    const pagebreakData = editorIsOpen ? PAGEBREAK_SEARCH_TEXT : div.outerHTML;
+    const result = new PageBreakNode(pagebreakData);
     return result;
   }
 
@@ -65,15 +131,26 @@ class PageBreakNode extends ExtendedTextNode {
     throw new Error('Not implemented as data is imported/exported using HTML');
   }
 
-  // eslint-disable-next-line class-methods-use-this
   exportJSON() {
-    return {};
+    return {
+      type: PAGEBREAK_TYPE,
+      pagebreak: this.__pagebreak,
+      version: 1
+    };
   }
 
-  getpagebreakNumber() {
+  getPagebreakData() {
     const self = this.getLatest();
     return self.__pagebreak;
   }
-}
 
-export default PageBreakNode;
+  // Required method for DecoratorNode
+  isInline() {
+    return false;
+  }
+
+  // Required method for DecoratorNode  
+  isKeyboardSelectable() {
+    return true;
+  }
+}
