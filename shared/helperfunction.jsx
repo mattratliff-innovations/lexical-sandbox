@@ -111,3 +111,24 @@ const toggleTableColumnIsHeader = useCallback(() => {
     writable.__hasColumnHeader = !shouldTurnToTD;
   }, 'toggleTableColumnIsHeader');
 }, [executeWithTableSelection, getTableCellNode, editor, curSelection]);
+
+const deleteTableAtSelection = useCallback(() => {
+  setTimeout(() => {
+    editor.update(() => {
+      try {
+        const cellNode = getTableCellNode();
+        if (!cellNode) {
+          console.warn('No cell node found for delete table');
+          return;
+        }
+
+        const tableNode = $getTableNodeFromLexicalNodeOrThrow(cellNode);
+        if (tableNode) {
+          tableNode.remove();
+        }
+      } catch (error) {
+        console.error('Error deleting table:', error);
+      }
+    });
+  }, 0);
+}, [editor, getTableCellNode]);
