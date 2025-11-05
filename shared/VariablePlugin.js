@@ -1,7 +1,8 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 
 import { createHeadlessEditor } from '@lexical/headless';
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
+import { $isTableCellNode, $isTableNode, $isTableRowNode } from '@lexical/table';
 import { mergeRegister } from '@lexical/utils';
 import { $applyNodeReplacement, $nodesOfType, $setSelection, COMMAND_PRIORITY_LOW, FOCUS_COMMAND } from 'lexical';
 
@@ -9,7 +10,6 @@ import { $isExtendedTextNode, ExtendedTextNode } from '../../ExtendedTextNode';
 import { editorConfig, exportLexicalHtml, importLexicalHtml } from '../../lexicalUtil';
 import { AddressNode } from '../nodes/AddressNode';
 import AlienNumberBarcode from '../nodes/AlienNumberBarcode';
-import AlienNumberNode from '../nodes/AlienNumberNode';
 import ContactsNode from '../nodes/ContactsNode';
 import DhsSeal from '../nodes/DhsSeal';
 import LetterDateNode from '../nodes/LetterDateNode';
@@ -29,7 +29,6 @@ const VARIABLE_NODES = [
   OrganizationAddress,
   OrganizationNameNode,
   LetterDateNode,
-  AlienNumberNode,
   PageBreakNode,
 ];
 
@@ -79,8 +78,9 @@ const $variableTransform = (node, draft, options) => {
 
         // let variableNode = nodeClass.createFromEditor(draft, editorIsOpen, options);
         let variableNode;
+
         // TODO temporary until refactor is complete. Starting with primaryApplicant
-        if (nodeClass.getType() === 'contact' || nodeClass.getType() === 'letterDetails') {
+        if (nodeClass === ContactsNode || nodeClass === LetterDetailsNode) {
           variableNode = nodeClass.createFromEditor(draft, editorIsOpen, searchText);
         } else {
           variableNode = nodeClass.createFromEditor(draft, editorIsOpen, options);
@@ -102,14 +102,20 @@ export const showVariableValues = (editor, draftState) => {
     () => {
       VARIABLE_NODES.forEach((nodeClass) => {
         const nodes = $nodesOfType(nodeClass);
-        nodes.forEach((node) => node.updateFromDraft(draftState, {}));
+        nodes.forEach((node) => {
+          if (node.updateFromDraft) {
+            node.updateFromDraft(draftState, {}, editor);
+          }
+        });
       });
 
       // TODO - after refactor completion we will not need 2 loops
       NODES_WITH_MULTIPLE_VARIABLES.forEach((nodeClass) => {
         const nodes = $nodesOfType(nodeClass);
         nodes.forEach((node) => {
-          node.updateFromDraft(draftState, node.getSubType(), {});
+          if (node.updateFromDraft) {
+            node.updateFromDraft(draftState, node.getSubType(), {}, editor);
+          }
         });
       });
 
@@ -129,7 +135,11 @@ const hydrateVariablesHeadlessly = (value, draft, options = {}) => {
   editor.update(
     () => {
       const nodes = $nodesOfType(AddressNode);
-      nodes.forEach((node) => node.updateFromDraft(draft, options));
+      nodes.forEach((node) => {
+        if (node.updateFromDraft) {
+          node.updateFromDraft(draft, options);
+        }
+      });
     },
     { discrete: true }
   );
@@ -138,41 +148,92 @@ const hydrateVariablesHeadlessly = (value, draft, options = {}) => {
 
 export default function VariablePlugin({ draft }) {
   const [editor] = useLexicalComposerContext();
+  const isProcessingTableRef = useRef(false);
+  const tableProcessingTimeoutRef = useRef(null);
 
   const $variableTransformFromEditor = (node) => {
+    // Skip transforms when processing table operations to prevent freeze
+    if (isProcessingTableRef.current) return;
+
     const editorIsOpen = editor.getRootElement() === document.activeElement;
     $variableTransform(node, draft, { editorIsOpen });
   };
 
   // Called on page load and when clicking into the editor
   useEffect(() => {
-    editor.registerNodeTransform(ExtendedTextNode, $variableTransformFromEditor);
+    const unregisterTransform = editor.registerNodeTransform(ExtendedTextNode, $variableTransformFromEditor);
 
-    mergeRegister(
-      editor.registerCommand(
-        FOCUS_COMMAND,
-        () => {
-          editor.update(() => {
-            VARIABLE_NODES.forEach((nodeClass) => {
-              const nodes = $nodesOfType(nodeClass);
-              nodes.forEach((node) => node.showVariable());
-            });
+    // Monitor for table operations using mutation listener
+    const unregisterMutation = editor.registerMutationListener((mutatedNodes, { prevEditorState, dirtyLeaves }) => {
+      // Check if any table-related nodes are being mutated
+      editor.getEditorState().read(() => {
+        for (const [nodeKey, mutation] of mutatedNodes) {
+          if (mutation === 'created' || mutation === 'updated') {
+            try {
+              const node = editor.getEditorState()._nodeMap.get(nodeKey);
+              if (node && ($isTableNode(node) || $isTableRowNode(node) || $isTableCellNode(node))) {
+                // Set flag to skip transforms during table operations
+                isProcessingTableRef.current = true;
 
-            // TODO - after refactor completion we will not need 2 loops
-            NODES_WITH_MULTIPLE_VARIABLES.forEach((nodeClass) => {
-              const nodes = $nodesOfType(nodeClass);
-              nodes.forEach((node) => {
-                node.showVariable(node.getSubType());
-              });
+                // Clear any existing timeout
+                if (tableProcessingTimeoutRef.current) {
+                  clearTimeout(tableProcessingTimeoutRef.current);
+                }
+
+                // Reset flag after a short delay to ensure table processing completes
+                tableProcessingTimeoutRef.current = setTimeout(() => {
+                  isProcessingTableRef.current = false;
+                }, 100);
+
+                break;
+              }
+            } catch (error) {
+              // Node may not exist, continue
+              console.error('Error checking node type:', error);
+            }
+          }
+        }
+      });
+    });
+
+    const unregisterFocus = editor.registerCommand(
+      FOCUS_COMMAND,
+      () => {
+        editor.update(() => {
+          VARIABLE_NODES.forEach((nodeClass) => {
+            const nodes = $nodesOfType(nodeClass);
+            nodes.forEach((node) => {
+              if (node.showVariable) {
+                node.showVariable();
+              }
             });
           });
 
-          return false;
-        },
-        COMMAND_PRIORITY_LOW
-      )
+          // TODO - after refactor completion we will not need 2 loops
+          NODES_WITH_MULTIPLE_VARIABLES.forEach((nodeClass) => {
+            const nodes = $nodesOfType(nodeClass);
+            nodes.forEach((node) => {
+              if (node.showVariable) {
+                node.showVariable(node.getSubType());
+              }
+            });
+          });
+        });
+
+        return false;
+      },
+      COMMAND_PRIORITY_LOW
     );
-  }, [editor]);
+
+    return () => {
+      unregisterTransform();
+      unregisterMutation();
+      unregisterFocus();
+      if (tableProcessingTimeoutRef.current) {
+        clearTimeout(tableProcessingTimeoutRef.current);
+      }
+    };
+  }, [editor, draft]);
 }
 
 export { $variableTransform, hydrateVariablesHeadlessly };
