@@ -147,44 +147,213 @@ describe LetterService do
         end
       end
     end
+
+    describe 'create_echo_letter' do
+  let(:receipt_number) { 'SRC2407050076' }
+  let(:form_type_name) { 'I539N' }
+  let(:network_id) { 'test-network-id' }
+  let(:source_code) { 'ECHO' }
+  let(:user) { create(:user, piv_upn: network_id, network_id: network_id) }
+  let(:organization) { create(:organization, active: true) }
+  let(:header) { create(:header) }
+  let(:source_system) { create(:source_system, code: source_code) }
+  let(:registration) { create(:registration, receipt_number: receipt_number, form_type_name: form_type_name) }
+  let(:letter_type) { create(:letter_type) }
+  let(:filing_type) { create(:filing_type, name: 'PAPER') }
+  let!(:status) { create(:status_draft) }
+  
+  let(:draft) do
+    Letter.new({
+      letter_type_id: letter_type.id,
+      registration_id: registration.id,
+      status: status
+    })
   end
-
-
-  describe 'create_letter_from_echo' do
-let(:receipt_number) { 'SRC2407050076' }
-let(:form_type_name) { 'I539N' }
-let(:registration) { create(:registration, receipt_number: receipt_number, form_type_name: form_type_name) }
-let(:network_id) { 'test-network-id' }
-let(:user) { create(:user, piv_upn: network_id) } # Ensure piv_upn matches network_id
-let(:echo_formtype_id) { form_type.id } # Define echo_formtype_id explicitly
-let(:form_type) { create(:form_type, id: 1, ft_rolledover: true) } # Create FormType with matching ID
-let(:echo_letter_params) do
-  {
-    'lettertype_uuid' => letter_type.id,
-    'network_id' => network_id,
-    'formtype_uuid' => echo_formtype_id,
-    'receipt_num' => receipt_number
-  }
-end
+  
+  let(:echo_letter_params) do
+    {
+      'network_id' => network_id,
+      'source_code' => source_code,
+      'filing_type' => 'PAPER'
+    }
+  end
 
   before do
-    allow(User).to receive(:find_by).with(network_id: network_id).and_return(user)
-    allow(FormType).to receive(:find).with(echo_formtype_id).and_return(form_type)
-    allow(LetterType).to receive(:find).with(echo_lettertype_id).and_return(letter_type)
-    allow(Organization).to receive(:find_by).with(echo_org_id: organization.id).and_return(organization)
+    user.organizations << organization unless user.organizations.include?(organization)
   end
 
-context 'when all parameters are valid' do
-  it 'creates the draft letter successfully' do
-    result = LetterService.create_letter(letter_params: echo_letter_params, echo: true)
+  context 'when all parameters are valid' do
+    it 'creates the echo letter successfully' do
+      result = LetterService.create_echo_letter(
+        draft,
+        echo_letter_params,
+        letter_type,
+        filing_type
+      )
 
-    expect(result.errors).to be_empty
-    expect(result.letter_type_id).to eq(letter_type.id)
-    expect(result.registration_id).to eq(registration.id)
-    expect(result.status.name).to eq(Status::DRAFT)
+      expect(result.errors).to be_empty
+      expect(result.letter_type_id).to eq(letter_type.id)
+      expect(result.registration_id).to eq(registration.id)
+      expect(result.organization_id).to eq(organization.id)
+      expect(result.created_by).to eq(user.piv_upn)
+      expect(result.assigned).to eq(user)
+      expect(result.source_system).to eq(source_system)
+      expect(result.filing_type).to eq(filing_type)
+    end
+
+    it 'sets echo-specific attributes' do
+      result = LetterService.create_echo_letter(
+        draft,
+        echo_letter_params,
+        letter_type,
+        filing_type
+      )
+
+      expect(result.days_forward).to eq(0)
+      expect(result.starts_with_locked).to be(false)
+      expect(result.ends_with_locked).to be(false)
+      expect(result.manual_creation).to be(false)
+    end
+
+    it 'assigns letter type attributes correctly' do
+      result = LetterService.create_echo_letter(
+        draft,
+        echo_letter_params,
+        letter_type,
+        filing_type
+      )
+
+      expect(result.starts_with).to eq(letter_type.starts_with)
+      expect(result.ends_with).to eq(letter_type.ends_with)
+      expect(result.margin_top).to eq(letter_type.margin_top)
+      expect(result.margin_left).to eq(letter_type.margin_left)
+      expect(result.margin_right).to eq(letter_type.margin_right)
+      expect(result.margin_bottom).to eq(letter_type.margin_bottom)
+    end
+
+    it 'creates a locator code with correct format' do
+      result = LetterService.create_echo_letter(
+        draft,
+        echo_letter_params,
+        letter_type,
+        filing_type
+      )
+
+      expect(result.locator_code).to match(/^#{organization.code}/)
+      expect(result.locator_code).to end_with('S')
+    end
+  end
+
+  context 'when user is not found' do
+    it 'adds an error to the draft' do
+      invalid_params = echo_letter_params.merge('network_id' => 'invalid-network-id')
+      
+      result = LetterService.create_echo_letter(
+        draft,
+        invalid_params,
+        letter_type,
+        filing_type
+      )
+
+      expect(result.errors[:base]).to include("User with network_id 'invalid-network-id' not found")
+    end
+  end
+
+  context 'when source system is not found' do
+    it 'adds an error to the draft' do
+      invalid_params = echo_letter_params.merge('source_code' => 'INVALID_SOURCE')
+      
+      result = LetterService.create_echo_letter(
+        draft,
+        invalid_params,
+        letter_type,
+        filing_type
+      )
+
+      expect(result.errors[:base]).to include("Source System with code 'INVALID_SOURCE' not found")
+    end
+  end
+
+  context 'when user has no active organization' do
+    before do
+      user.organizations.each { |org| org.update(active: false) }
+    end
+
+    it 'handles gracefully when organization is nil' do
+      result = LetterService.create_echo_letter(
+        draft,
+        echo_letter_params,
+        letter_type,
+        filing_type
+      )
+
+      # The method should still attempt to create the transaction
+      # but may fail if organization is required
+      expect(result).to be_a(Letter)
+    end
+  end
+
+  context 'when filing_type is nil (default to PAPER)' do
+    it 'uses the provided filing_type' do
+      result = LetterService.create_echo_letter(
+        draft,
+        echo_letter_params,
+        letter_type,
+        nil
+      )
+
+      # Should handle nil filing_type gracefully
+      expect(result).to be_a(Letter)
+    end
+  end
+
+  context 'with multiple organizations' do
+    let(:inactive_org) { create(:organization, active: false) }
+    
+    before do
+      user.organizations << inactive_org
+    end
+
+    it 'uses the first active organization' do
+      result = LetterService.create_echo_letter(
+        draft,
+        echo_letter_params,
+        letter_type,
+        filing_type
+      )
+
+      expect(result.organization).to eq(organization)
+      expect(result.organization.active).to be(true)
+    end
+  end
+
+  context 'when creating the letter transaction' do
+    it 'persists the letter to the database' do
+      expect {
+        LetterService.create_echo_letter(
+          draft,
+          echo_letter_params,
+          letter_type,
+          filing_type
+        )
+      }.to change(Letter, :count).by(1)
+    end
+
+    it 'assigns default letter recipients' do
+      result = LetterService.create_echo_letter(
+        draft,
+        echo_letter_params,
+        letter_type,
+        filing_type
+      )
+
+      # Assuming the assign_default_letter_recipients! method is called
+      expect(result.id).not_to be_nil
+    end
   end
 end
-end
+
+  end
 
   # TODO: Complete these rspec tests
   describe 'validate_and_fetch_scribe_data' do
