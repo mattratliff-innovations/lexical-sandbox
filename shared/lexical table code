@@ -1,0 +1,443 @@
+Recommended Approach
+I recommend Solution 2 (Custom DOM Conversion) because it:
+
+✅ Handles import automatically
+✅ Handles export automatically
+✅ Works with copy/paste
+✅ Maintains attributes in the HTML
+✅ Is the most maintainable long-term
+
+Here's the complete implementation:
+typescript// CustomTableNode.ts
+import { TableNode, SerializedTableNode, $isTableNode } from '@lexical/table';
+import { DOMConversionMap, DOMConversionOutput, EditorConfig, NodeKey } from 'lexical';
+
+export class CustomTableNode extends TableNode {
+  __bordersOn: boolean;
+  __rowStriping: boolean;
+
+  constructor(bordersOn = true, rowStriping = false, key?: NodeKey) {
+    super(key);
+    this.__bordersOn = bordersOn;
+    this.__rowStriping = rowStriping;
+  }
+
+  static getType() {
+    return 'table';
+  }
+
+  static clone(node: CustomTableNode) {
+    return new CustomTableNode(node.__bordersOn, node.__rowStriping, node.__key);
+  }
+
+  static importDOM(): DOMConversionMap | null {
+    return {
+      table: () => ({
+        conversion: (element: HTMLElement): DOMConversionOutput => {
+          const bordersOn = element.getAttribute('data-borders-on') !== 'false';
+          const rowStriping = element.getAttribute('data-row-striping') === 'true';
+          
+          return {
+            node: new CustomTableNode(bordersOn, rowStriping),
+          };
+        },
+        priority: 1,
+      }),
+    };
+  }
+
+  exportJSON() {
+    return {
+      ...super.exportJSON(),
+      bordersOn: this.__bordersOn,
+      rowStriping: this.__rowStriping,
+      type: 'table',
+      version: 1,
+    };
+  }
+
+  static importJSON(serializedNode: any) {
+    return new CustomTableNode(
+      serializedNode.bordersOn ?? true,
+      serializedNode.rowStriping ?? false
+    );
+  }
+
+  createDOM(config: EditorConfig) {
+    const element = super.createDOM(config);
+    element.setAttribute('data-borders-on', String(this.__bordersOn));
+    element.setAttribute('data-row-striping', String(this.__rowStriping));
+    
+    if (this.__bordersOn) element.classList.add('table-borders-on');
+    if (this.__rowStriping) element.classList.add('table-row-striping');
+    
+    return element;
+  }
+
+  updateDOM(prevNode: CustomTableNode, dom: HTMLElement) {
+    let needsUpdate = super.updateDOM(prevNode, dom);
+    
+    if (prevNode.__bordersOn !== this.__bordersOn) {
+      dom.setAttribute('data-borders-on', String(this.__bordersOn));
+      dom.classList.toggle('table-borders-on', this.__bordersOn);
+      needsUpdate = true;
+    }
+    
+    if (prevNode.__rowStriping !== this.__rowStriping) {
+      dom.setAttribute('data-row-striping', String(this.__rowStriping));
+      dom.classList.toggle('table-row-striping', this.__rowStriping);
+      needsUpdate = true;
+    }
+    
+    return needsUpdate;
+  }
+
+  getBordersOn() { return this.__bordersOn; }
+  setBordersOn(value: boolean) { this.getWritable().__bordersOn = value; }
+  getRowStriping() { return this.__rowStriping; }
+  setRowStriping(value: boolean) { this.getWritable().__rowStriping = value; }
+}
+Register it in your editor config:
+javascriptconst editorConfig = {
+  nodes: [
+    CustomTableNode, // Use this instead of TableNode
+    TableCellNode,
+    TableRowNode,
+    // ... other nodes
+  ],
+};
+Now when you import HTML with $generateNodesFromDOM, the table attributes will be automatically read and set!RetryTo run code, enable code execution and file creation in Settings > Capabilities.MRUsing Solution 2 how would I use the CustomTableNode?Great question! Here's how to use the CustomTableNode in your Lexical editor:
+Step 1: Register the CustomTableNode
+In your editor configuration, replace the standard TableNode with your CustomTableNode:
+javascriptimport { LexicalComposer } from '@lexical/react/LexicalComposer';
+import { TableCellNode, TableRowNode } from '@lexical/table';
+import { CustomTableNode } from './nodes/CustomTableNode';
+
+const editorConfig = {
+  namespace: 'MyEditor',
+  theme: {
+    // your theme
+  },
+  nodes: [
+    CustomTableNode,  // Use CustomTableNode instead of TableNode
+    TableCellNode,
+    TableRowNode,
+    // ... your other nodes (ParagraphNode, TextNode, etc.)
+  ],
+  onError: (error) => {
+    console.error(error);
+  },
+};
+
+function Editor() {
+  return (
+    <LexicalComposer initialConfig={editorConfig}>
+      {/* Your editor components */}
+    </LexicalComposer>
+  );
+}
+Step 2: Import HTML from Database
+When loading content from your database:
+javascriptimport { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
+import { $generateNodesFromDOM } from '@lexical/html';
+import { $getRoot } from 'lexical';
+import { useEffect } from 'react';
+
+function LoadContentComponent({ htmlContent }) {
+  const [editor] = useLexicalComposerContext();
+
+  useEffect(() => {
+    if (!htmlContent) return;
+
+    editor.update(() => {
+      // Parse HTML
+      const parser = new DOMParser();
+      const dom = parser.parseFromString(htmlContent, 'text/html');
+
+      // Generate Lexical nodes from DOM
+      // CustomTableNode.importDOM() will automatically be called for <table> elements
+      const nodes = $generateNodesFromDOM(editor, dom);
+
+      // Clear existing content and insert new nodes
+      const root = $getRoot();
+      root.clear();
+      root.append(...nodes);
+    });
+  }, [editor, htmlContent]);
+
+  return null;
+}
+
+// Usage in your editor
+function MyEditor() {
+  const [content, setContent] = useState('');
+
+  useEffect(() => {
+    // Fetch from your Ruby backend
+    fetch('/api/documents/123')
+      .then(res => res.json())
+      .then(data => setContent(data.html_content));
+  }, []);
+
+  return (
+    <LexicalComposer initialConfig={editorConfig}>
+      <LoadContentComponent htmlContent={content} />
+      {/* Other editor components */}
+    </LexicalComposer>
+  );
+}
+Step 3: Create Tables Programmatically
+When creating new tables in the editor:
+javascriptimport { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
+import { INSERT_TABLE_COMMAND } from '@lexical/table';
+import { $getSelection, $isRangeSelection } from 'lexical';
+import { $findMatchingParent } from '@lexical/utils';
+import { CustomTableNode } from './nodes/CustomTableNode';
+
+function TableInsertButton() {
+  const [editor] = useLexicalComposerContext();
+
+  const insertTable = () => {
+    editor.dispatchCommand(INSERT_TABLE_COMMAND, {
+      columns: '3',
+      rows: '3',
+      includeHeaders: false,
+    });
+
+    // The table will be created as CustomTableNode automatically
+    // because it's registered in the editor config
+    
+    // Optionally, you can customize it right after insertion
+    editor.update(() => {
+      const selection = $getSelection();
+      if ($isRangeSelection(selection)) {
+        const anchorNode = selection.anchor.getNode();
+        const tableNode = $findMatchingParent(anchorNode, (node) => 
+          node instanceof CustomTableNode
+        );
+        
+        if (tableNode instanceof CustomTableNode) {
+          // Set custom properties
+          tableNode.setBordersOn(true);
+          tableNode.setRowStriping(false);
+        }
+      }
+    });
+  };
+
+  return <button onClick={insertTable}>Insert Table</button>;
+}
+Step 4: Toggle Table Attributes
+Create controls to toggle borders and row striping:
+javascriptimport { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
+import { $getSelection, $isRangeSelection } from 'lexical';
+import { $findMatchingParent } from '@lexical/utils';
+import { CustomTableNode } from './nodes/CustomTableNode';
+import { useState, useEffect } from 'react';
+
+function TableControls() {
+  const [editor] = useLexicalComposerContext();
+  const [bordersOn, setBordersOn] = useState(true);
+  const [rowStriping, setRowStriping] = useState(false);
+  const [hasTable, setHasTable] = useState(false);
+
+  // Update state when selection changes
+  useEffect(() => {
+    return editor.registerUpdateListener(({ editorState }) => {
+      editorState.read(() => {
+        const selection = $getSelection();
+        if ($isRangeSelection(selection)) {
+          const anchorNode = selection.anchor.getNode();
+          const tableNode = $findMatchingParent(anchorNode, (node) => 
+            node instanceof CustomTableNode
+          );
+          
+          if (tableNode instanceof CustomTableNode) {
+            setHasTable(true);
+            setBordersOn(tableNode.getBordersOn());
+            setRowStriping(tableNode.getRowStriping());
+          } else {
+            setHasTable(false);
+          }
+        }
+      });
+    });
+  }, [editor]);
+
+  const toggleBorders = () => {
+    editor.update(() => {
+      const selection = $getSelection();
+      if ($isRangeSelection(selection)) {
+        const anchorNode = selection.anchor.getNode();
+        const tableNode = $findMatchingParent(anchorNode, (node) => 
+          node instanceof CustomTableNode
+        );
+        
+        if (tableNode instanceof CustomTableNode) {
+          tableNode.setBordersOn(!bordersOn);
+        }
+      }
+    });
+  };
+
+  const toggleRowStriping = () => {
+    editor.update(() => {
+      const selection = $getSelection();
+      if ($isRangeSelection(selection)) {
+        const anchorNode = selection.anchor.getNode();
+        const tableNode = $findMatchingParent(anchorNode, (node) => 
+          node instanceof CustomTableNode
+        );
+        
+        if (tableNode instanceof CustomTableNode) {
+          tableNode.setRowStriping(!rowStriping);
+        }
+      }
+    });
+  };
+
+  if (!hasTable) return null;
+
+  return (
+    <div className="table-controls">
+      <button 
+        onClick={toggleBorders}
+        className={bordersOn ? 'active' : ''}
+      >
+        {bordersOn ? 'Hide' : 'Show'} Borders
+      </button>
+      <button 
+        onClick={toggleRowStriping}
+        className={rowStriping ? 'active' : ''}
+      >
+        {rowStriping ? 'Disable' : 'Enable'} Row Striping
+      </button>
+    </div>
+  );
+}
+Step 5: Export to HTML
+When saving back to the database:
+javascriptimport { $generateHtmlFromNodes } from '@lexical/html';
+
+function SaveButton() {
+  const [editor] = useLexicalComposerContext();
+
+  const saveContent = async () => {
+    let htmlString = '';
+
+    editor.getEditorState().read(() => {
+      // CustomTableNode.createDOM() will automatically add data attributes
+      htmlString = $generateHtmlFromNodes(editor);
+    });
+
+    // Save to your Ruby backend
+    await fetch('/api/documents/123', {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${yourToken}`,
+      },
+      body: JSON.stringify({
+        html_content: htmlString,
+      }),
+    });
+  };
+
+  return <button onClick={saveContent}>Save</button>;
+}
+Step 6: Add CSS Styles
+Add corresponding CSS for the classes:
+css/* Table with borders */
+.table-borders-on {
+  border-collapse: collapse;
+}
+
+.table-borders-on td,
+.table-borders-on th {
+  border: 1px solid #ddd;
+  padding: 8px;
+}
+
+/* Table with row striping */
+.table-row-striping tbody tr:nth-child(odd) {
+  background-color: #f9f9f9;
+}
+
+.table-row-striping tbody tr:nth-child(even) {
+  background-color: #ffffff;
+}
+
+/* Combined styles work together */
+.table-borders-on.table-row-striping tbody tr:nth-child(odd) {
+  background-color: #f9f9f9;
+}
+Complete Example
+Here's a full working example:
+javascript// Editor.jsx
+import React, { useState, useEffect } from 'react';
+import { LexicalComposer } from '@lexical/react/LexicalComposer';
+import { RichTextPlugin } from '@lexical/react/LexicalRichTextPlugin';
+import { ContentEditable } from '@lexical/react/LexicalContentEditable';
+import { HistoryPlugin } from '@lexical/react/LexicalHistoryPlugin';
+import { TablePlugin } from '@lexical/react/LexicalTablePlugin';
+import LexicalErrorBoundary from '@lexical/react/LexicalErrorBoundary';
+import { TableCellNode, TableRowNode } from '@lexical/table';
+import { CustomTableNode } from './nodes/CustomTableNode';
+import { LoadContentComponent } from './components/LoadContentComponent';
+import { TableControls } from './components/TableControls';
+import { SaveButton } from './components/SaveButton';
+
+const editorConfig = {
+  namespace: 'MyEditor',
+  theme: {
+    // your theme
+  },
+  nodes: [
+    CustomTableNode,
+    TableCellNode,
+    TableRowNode,
+  ],
+  onError: (error) => {
+    console.error(error);
+  },
+};
+
+export default function Editor({ documentId }) {
+  const [htmlContent, setHtmlContent] = useState('');
+
+  useEffect(() => {
+    // Load from database
+    fetch(`/api/documents/${documentId}`)
+      .then(res => res.json())
+      .then(data => setHtmlContent(data.html_content));
+  }, [documentId]);
+
+  return (
+    <LexicalComposer initialConfig={editorConfig}>
+      <div className="editor-container">
+        <div className="toolbar">
+          <TableControls />
+          <SaveButton documentId={documentId} />
+        </div>
+        
+        <RichTextPlugin
+          contentEditable={<ContentEditable className="editor-input" />}
+          placeholder={<div className="editor-placeholder">Start typing...</div>}
+          ErrorBoundary={LexicalErrorBoundary}
+        />
+        
+        <HistoryPlugin />
+        <TablePlugin />
+        <LoadContentComponent htmlContent={htmlContent} />
+      </div>
+    </LexicalComposer>
+  );
+}
+Key Points
+
+Automatic Import: When you use $generateNodesFromDOM, it automatically calls CustomTableNode.importDOM() for any <table> elements
+Automatic Export: When you use $generateHtmlFromNodes, it automatically calls CustomTableNode.createDOM() which adds the data attributes
+Type Safety: The instanceof CustomTableNode checks ensure you're working with the right node type
+Persistence: The data attributes (data-borders-on, data-row-striping) are stored in your HTML in the database
+
+The CustomTableNode will now handle all table imports/exports automatically with the bordersOn and rowStriping attributes preserved!RetryTo run code, enable code execution and file creation in Settings > Capabilities.
