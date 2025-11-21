@@ -97,8 +97,10 @@ export class CustomTableNode extends TableNode {
   getRowStriping() { return this.__rowStriping; }
   setRowStriping(value: boolean) { this.getWritable().__rowStriping = value; }
 }
-Register it in your editor config:
-javascriptconst editorConfig = {
+// Register it in your editor config:
+// javascript
+
+const editorConfig = {
   nodes: [
     CustomTableNode, // Use this instead of TableNode
     TableCellNode,
@@ -106,10 +108,12 @@ javascriptconst editorConfig = {
     // ... other nodes
   ],
 };
-Now when you import HTML with $generateNodesFromDOM, the table attributes will be automatically read and set!RetryTo run code, enable code execution and file creation in Settings > Capabilities.MRUsing Solution 2 how would I use the CustomTableNode?Great question! Here's how to use the CustomTableNode in your Lexical editor:
-Step 1: Register the CustomTableNode
-In your editor configuration, replace the standard TableNode with your CustomTableNode:
-javascriptimport { LexicalComposer } from '@lexical/react/LexicalComposer';
+// Now when you import HTML with $generateNodesFromDOM, the table attributes will be automatically read and set!RetryTo run code, enable code execution and file creation in Settings > Capabilities.MRUsing Solution 2 how would I use the CustomTableNode?Great question! Here's how to use the CustomTableNode in your Lexical editor:
+// Step 1: Register the CustomTableNode
+// In your editor configuration, replace the standard TableNode with your CustomTableNode:
+// javascript
+
+import { LexicalComposer } from '@lexical/react/LexicalComposer';
 import { TableCellNode, TableRowNode } from '@lexical/table';
 import { CustomTableNode } from './nodes/CustomTableNode';
 
@@ -186,9 +190,11 @@ function MyEditor() {
     </LexicalComposer>
   );
 }
-Step 3: Create Tables Programmatically
-When creating new tables in the editor:
-javascriptimport { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
+// Step 3: Create Tables Programmatically
+// When creating new tables in the editor:
+// javascrip
+
+import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
 import { INSERT_TABLE_COMMAND } from '@lexical/table';
 import { $getSelection, $isRangeSelection } from 'lexical';
 import { $findMatchingParent } from '@lexical/utils';
@@ -227,9 +233,12 @@ function TableInsertButton() {
 
   return <button onClick={insertTable}>Insert Table</button>;
 }
-Step 4: Toggle Table Attributes
-Create controls to toggle borders and row striping:
-javascriptimport { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
+
+// Step 4: Toggle Table Attributes
+// Create controls to toggle borders and row striping:
+// javascript
+
+import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
 import { $getSelection, $isRangeSelection } from 'lexical';
 import { $findMatchingParent } from '@lexical/utils';
 import { CustomTableNode } from './nodes/CustomTableNode';
