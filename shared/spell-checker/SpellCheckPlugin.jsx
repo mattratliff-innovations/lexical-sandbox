@@ -73,9 +73,9 @@ function processIgnoredVariables(text) {
 }
 
 // LanguageTool API service
+// LanguageTool API service - FIXED VERSION
 class LanguageToolService {
   constructor() {
-    // this.apiUrl = 'http://localhost:8080/v2/check';
     this.cache = new Map();
     // Case-insensitive list (lowercased)
     this.customIgnoreWordsList = [
@@ -107,29 +107,48 @@ class LanguageToolService {
     }
 
     try {
-      const formData = new URLSearchParams();
-      formData.append('text', originalText);
-      formData.append('language', 'en-US');
-      formData.append('enabledOnly', 'false');
-      formData.append('ignoreWords', this.customIgnoreWordsList.join(','));
+      // FIXED: Properly format the request data for Rails
+      const requestData = {
+        text: originalText,
+        language: 'en-US',
+        enabledOnly: false,
+        // Note: ignoreWords might not be supported by LanguageTool API directly
+        // You may need to handle this in your Ruby backend or process client-side
+      };
 
-      console.log('calling spellcheck...');
-      const response = await axios.post(`${APP_API_ENDPOINT}/spellcheck`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: formData,
-      });
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      console.log('calling spellcheck with data:', requestData);
 
-      const data = await response.json();
+      // FIXED: Correct axios.post usage
+      const response = await axios.post(
+        `${APP_API_ENDPOINT}/spellcheck`,
+        requestData,
+        {
+          headers: { 
+            'Content-Type': 'application/json'  // Rails expects JSON
+          },
+          timeout: 30000  // 30 second timeout
+        }
+      );
 
-      console.log('response data = ', data);
+      console.log('response status:', response.status);
+      console.log('response data:', response.data);
+
+      // Axios automatically handles JSON parsing and throws on non-2xx status
+      const data = response.data;
+
       const result = this.processLanguageToolResponse(data, originalText);
 
       this.cache.set(cacheKey, result);
       return result;
     } catch (error) {
-      throw new Error(`LanguageTool API error: ${error}`);
+      console.error('LanguageTool API error:', error);
+      console.error('Error response:', error.response?.data);
+      console.error('Error status:', error.response?.status);
+      
+      // Clear cache on error to allow retry
+      this.cache.delete(cacheKey);
+      
+      throw new Error(`LanguageTool API error: ${error.message}`);
     }
   }
 
