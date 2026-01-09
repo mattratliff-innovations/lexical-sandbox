@@ -34,6 +34,8 @@ class Api::Scribe::V1::OrganizationsController < ApplicationController
     org_params = activate_default_address(organization_params)
     @organization = Organization.create(org_params)
 
+    puts @organization.to_s
+
     if @organization.save
       render json: organization.as_xrefs_result
     else
@@ -66,9 +68,10 @@ class Api::Scribe::V1::OrganizationsController < ApplicationController
 
   def update
     organization = Organization.find(params[:id])
+    org_params = activate_default_address(organization_params)
 
     ActiveRecord::Base.transaction do
-      organization.removed_header_letter_type_xrefs(organization_params).each do |entry|
+      organization.removed_header_letter_type_xrefs(org_params).each do |entry|
         spxref = OrganizationHeaderLetterTypeXref.find(entry['id'])
         spxref.destroy
       end
@@ -83,7 +86,7 @@ class Api::Scribe::V1::OrganizationsController < ApplicationController
     end
     # @organization = Organization.includes(organization_address_xrefs: [:address]).find(params[:id])
     # org_params = activate_default_address(organization_params)
-    # if @organization.update(org_params)
+    # if @organization.update(In )
     #   render json: @organization.to_json(include: [:letter_types, { organization_signatures: { methods: :signature_image_url },
     #                                                                 organization_address_xrefs: { include: :address } }])
     # else

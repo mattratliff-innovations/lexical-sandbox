@@ -38,42 +38,27 @@ class Organization < ApplicationRecord
   ORGANIZATION_PARAMS = [:id, :name, :active, :created_at, :updated_at].freeze
 
   def serializable_hash(options=nil)
-    super.merge("default_signature" => default_signature)
+    hash = super(options)
+    # super.merge("default_signature" => default_signature)
+    hash["default_signature"] = default_signature
+    hash
   end
 
   def as_xrefs_result
   as_json(
     include: {
-      letter_types: letter_types,
+      letter_types: {},
       organization_address_xrefs: { include: :address },
       organization_header_letter_type_xrefs: {
         include: {
           letter_type: { only: [:id, :name] },
           header: { only: [:id, :name] }
         },
-        only: :id
+        only: [:id]
       }
     }
   )
 end
-
-  # def as_xrefs_result # rubocop:disable Metrics/MethodLength
-  #   as_json(
-  #     include: {
-  #       letter_types:,
-  #       organization_address_xrefs: {
-  #           include: :address
-  #       },
-  #       organization_header_letter_type_xrefs: {
-  #         include: {
-  #           letter_type: { only: [:id, :name] },
-  #           header: { only: [:id, :name] }
-  #         },
-  #         only: :id
-  #       }
-  #     }
-  #   )
-  # end
 
   def removed_header_letter_type_xrefs(organization_params)
     organization_header_letter_type_xrefs.reject do |orgxref|
@@ -88,4 +73,5 @@ end
   def upcase_code
     self.code = code.to_s.upcase if code.present?
   end
+
 end
