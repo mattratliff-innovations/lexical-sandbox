@@ -156,7 +156,6 @@ export default function OrganizationForm() {
       headers: adminFormData.headers,
       letterTypes: adminFormData.letterTypes,
       occ: adminFormData.occ,
-      organizationHeaderLetterTypeXrefs: adminFormData.organizationHeaderLetterTypeXrefs,
       headerId: adminFormData.headerId,
     }),
     [adminFormData]
@@ -240,12 +239,6 @@ export default function OrganizationForm() {
   };
 
   const onSubmit = async (data) => {
-    const headersAndLetters = data?.headers?.selected?.map((item) => ({
-      id: item?.id,
-      header_id: item?.header?.id,
-      letter_type_id: item?.letterType?.id,
-    }));
-
     const axiosAction = isUpdating() ? axios.put : axios.post;
     try {
       const response = await axiosAction(`${APP_API_ENDPOINT}/organizations/${adminFormData.id}`, {
@@ -255,7 +248,7 @@ export default function OrganizationForm() {
           active: data.active,
           daysForward: data.daysForward,
           letter_type_ids: data.letterTypes.filter((letterType) => letterType.selected).map((selected) => selected.id),
-          organization_header_letter_type_xrefs_attributes: headersAndLetters,
+          header_ids: data.headers.filter((header) => header.selected).map((selected) => selected.id),
           occ: data.occ,
           header_id: data.headerId,
         },
@@ -398,9 +391,10 @@ export default function OrganizationForm() {
       <ToastContainer />
       <UtilityModal isOpen={isBlocked} setIsOpen={setIsBlocked} blocker={blocker} name="Organization" />
 
+      <H1 data-testid="header">{`${adminFormSettings.action} Organization`}</H1>
+
       <form>
         <Spinner isVisible={isDefaultHeadersListLoading}>
-          <H1 data-testid="header">{`${adminFormSettings.action} Organization`}</H1>
           <div className="row">
             <div className="col-sm-10">
               <CustomError errorType={curAlertType} />
@@ -572,20 +566,21 @@ export default function OrganizationForm() {
 
           <div className="row">
             <div className="col-sm-5">
+              <div className="d-flex align-items-center required">
+                <H2>Associated Headers</H2>
+              </div>
+
+              <ControlledComboBox
+                typeaheadId="headers"
+                typeaheadLabel="Header(s)"
+                control={control}
+                name="headers"
+                rule="Associated Header is required!"
+              />
+            </div>
+            <div className="col-sm-5">
               <H2>Associated Letter Types</H2>
               <ControlledComboBox typeaheadId="letterType" typeaheadLabel="Letter Type(s)" control={control} name="letterTypes" />
-            </div>
-
-            <div className="col-sm-5">
-              <H2>Associated Custom Letter Headers</H2>
-              <ControlledComboBox
-                typeaheadId="headersAndLetters"
-                typeaheadLabel="Headers"
-                name="headersAndLetters"
-                control={control}
-                multiMode
-                rule="At least one letter-header association is required"
-              />
             </div>
           </div>
 

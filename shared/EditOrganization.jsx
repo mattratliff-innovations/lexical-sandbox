@@ -7,58 +7,41 @@ import 'react-toastify/dist/ReactToastify.css';
 import OrganizationForm from './OrganizationForm';
 import { RETRIEVING_HEADERS_ERRORS } from './OrganizationFormUtil';
 import { AdminFormProvider, useAdminFormContext } from '../../../contexts/AdminFormContext';
-import fetchHeaders from '../../../http/headers';
-import fetchLetterTypes from '../../../http/letter_types';
-import { fetchOrganization } from '../../../http/organizations';
+import { APP_API_ENDPOINT, createAuthenticatedAxios } from '../../../http/authenticatedAxios';
 import LoadingFallback from '../../../utils/LoadingFallback';
 
 function EditOrganization() {
   const { setAdminFormSettings, setAdminFormData, setAdminErrorMessage } = useAdminFormContext();
+  const axios = createAuthenticatedAxios();
   const { id } = useParams();
   const [loading, setLoading] = useState(true);
 
-  const mapHeaderLetterTypes = (xrefs) =>
-    xrefs?.map((xref) => ({
-      organizationLetterTypeHeaderXrefId: xref.id,
-      letterType: {
-        id: xref.letterType.id,
-        name: xref.letterType.name,
-        label: xref.letterType.name,
-      },
-      header: {
-        id: xref.header.id,
-        name: xref.header.name,
-        label: xref.header.name,
-      },
-    }));
-
   useEffect(() => {
-    fetchOrganization(id)
+    axios
+      .get(`${APP_API_ENDPOINT}/organizations/${id}`)
       .then((orgRes) => {
-        fetchHeaders()
+        const params = { organization_id: id };
+        axios
+          .get(`${APP_API_ENDPOINT}/headers/available_headers_for_organization`, { params })
           .then((headerRes) => {
-            fetchLetterTypes(true)
+            axios
+              .get(`${APP_API_ENDPOINT}/letter_types`, { params: { include_organization: true } })
               .then((response) => {
-                // all letter types
-                const letterTypes = response.map((letterType) => ({
+                const letterTypes = response.data.map((letterType) => ({
                   ...letterType,
                   label: letterType.name,
                   value: letterType.id,
                   selected: letterType.organizations.some((org) => org.id === id),
                 }));
 
-                // all headers
-                const headers = headerRes.map((header) => ({
+                const headers = headerRes.data.map((header) => ({
                   ...header,
                   label: header.name,
                   value: header.id,
+                  selected: header.organizationHeaderXrefs?.length > 0,
                 }));
 
-                const transformedHeaderLetterTypes = {
-                  selected: mapHeaderLetterTypes(orgRes.organizationHeaderLetterTypeXrefs),
-                };
-
-                setAdminFormData({ ...orgRes, headers, letterTypes, headerLetterTypeXrefs: transformedHeaderLetterTypes });
+                setAdminFormData({ ...orgRes.data, headers, letterTypes });
                 setAdminFormSettings({ action: 'Edit', participle: 'edited' });
               })
               .catch(() => setAdminErrorMessage('Encountered an unknown error retrieving Letter Types.'));
