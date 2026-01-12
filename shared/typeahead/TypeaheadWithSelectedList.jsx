@@ -60,7 +60,7 @@ export default function TypeaheadWithSelectedList({ typeaheadId, typeaheadLabel,
   const [allData, setAllData] = useState([]);
   const [currentForm, setCurrentForm] = useState({});
   const [currentLetterType, setCurrentLetterType] = useState(null);
-  const [currentHeader, setCurrentHeader] = useState(null);
+  // const [currentHeader, setCurrentHeader] = useState(null);
   const [formTypes, setFormTypes] = useState([]);
   const [letterTypes, setLetterTypes] = useState([]);
   const [headers, setHeaders] = useState([]);
@@ -235,7 +235,7 @@ export default function TypeaheadWithSelectedList({ typeaheadId, typeaheadLabel,
               return;
             }
             if (isHeaderSelection) {
-              setCurrentHeader(selectedOption);
+              // setCurrentHeader(selectedOption);
               // Check if letter type is already selected
               if (!currentLetterType) {
                 // Can't add without a letter type
@@ -256,7 +256,7 @@ export default function TypeaheadWithSelectedList({ typeaheadId, typeaheadLabel,
                 clonedOptions.selected.push(newSelection);
                 // Reset selections
                 setCurrentLetterType(null);
-                setCurrentHeader(null);
+                // setCurrentHeader(null);
               }
             }
           } else {
@@ -310,18 +310,7 @@ export default function TypeaheadWithSelectedList({ typeaheadId, typeaheadLabel,
 
       setValues(clonedOptions);
     },
-    [
-      options,
-      multiMode,
-      currentForm,
-      currentLetterType,
-      currentHeader,
-      letterTypes,
-      headers,
-      isClassPreferenceTypeahead,
-      isLettersAndHeadersTypeahead,
-      setValues,
-    ]
+    [options, multiMode, currentForm, currentLetterType, letterTypes, headers, isClassPreferenceTypeahead, isLettersAndHeadersTypeahead, setValues]
   );
 
   /**

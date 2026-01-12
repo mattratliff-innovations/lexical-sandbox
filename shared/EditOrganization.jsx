@@ -7,58 +7,81 @@ import 'react-toastify/dist/ReactToastify.css';
 import OrganizationForm from './OrganizationForm';
 import { RETRIEVING_HEADERS_ERRORS } from './OrganizationFormUtil';
 import { AdminFormProvider, useAdminFormContext } from '../../../contexts/AdminFormContext';
-import { APP_API_ENDPOINT, createAuthenticatedAxios } from '../../../http/authenticatedAxios';
+import fetchHeaders from '../../../http/headers';
+import fetchLetterTypes from '../../../http/letter_types';
+import { fetchOrganization } from '../../../http/organizations';
 import LoadingFallback from '../../../utils/LoadingFallback';
+
+function transformLetterTypes(letterTypeData, orgId) {
+  return letterTypeData.map((letterType) => ({
+    ...letterType,
+    label: letterType.name,
+    value: letterType.id,
+    selected: letterType.organizations.some((org) => org.id === orgId),
+  }));
+}
+
+function transformHeaders(headerData) {
+  return headerData.map((header) => ({
+    ...header,
+    label: header.name,
+    value: header.id,
+  }));
+}
+
+function transformCustomAssociations(xrefs = []) {
+  return xrefs.map((xref) => ({
+    id: xref.id,
+    letterTypeId: xref.letterType?.id,
+    headerId: xref.header?.id,
+    letterType: xref.letterType,
+    header: xref.header,
+  }));
+}
 
 function EditOrganization() {
   const { setAdminFormSettings, setAdminFormData, setAdminErrorMessage } = useAdminFormContext();
-  const axios = createAuthenticatedAxios();
   const { id } = useParams();
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    axios
-      .get(`${APP_API_ENDPOINT}/organizations/${id}`)
-      .then((orgRes) => {
-        const params = { organization_id: id };
-        axios
-          .get(`${APP_API_ENDPOINT}/headers/available_headers_for_organization`, { params })
-          .then((headerRes) => {
-            axios
-              .get(`${APP_API_ENDPOINT}/letter_types`, { params: { include_organization: true } })
-              .then((response) => {
-                const letterTypes = response.data.map((letterType) => ({
-                  ...letterType,
-                  label: letterType.name,
-                  value: letterType.id,
-                  selected: letterType.organizations.some((org) => org.id === id),
-                }));
+    const fetchData = async () => {
+      try {
+        const orgData = await fetchOrganization(id);
+        const headerData = await fetchHeaders();
+        const letterTypeData = await fetchLetterTypes(true);
 
-                const headers = headerRes.data.map((header) => ({
-                  ...header,
-                  label: header.name,
-                  value: header.id,
-                  selected: header.organizationHeaderXrefs?.length > 0,
-                }));
+        const letterTypes = transformLetterTypes(letterTypeData, id);
+        const headers = transformHeaders(headerData);
+        const customLetterHeaderAssociations = transformCustomAssociations(orgData.organizationHeaderLetterTypeXrefs);
 
-                setAdminFormData({ ...orgRes.data, headers, letterTypes });
-                setAdminFormSettings({ action: 'Edit', participle: 'edited' });
-              })
-              .catch(() => setAdminErrorMessage('Encountered an unknown error retrieving Letter Types.'));
-          })
-          .catch(() => {
-            setAdminErrorMessage(RETRIEVING_HEADERS_ERRORS);
-          });
-      })
-      .catch(() => {
-        toast.error('There was an error retrieving the organization.', {
-          position: 'top-center',
-          transition: Flip,
-          theme: 'dark',
+        setAdminFormData({
+          ...orgData,
+          headers,
+          letterTypes,
+          customLetterHeaderAssociations,
         });
-      })
-      .finally(() => setLoading(false));
-  }, [setAdminFormData]);
+        setAdminFormSettings({ action: 'Edit', participle: 'edited' });
+      } catch (error) {
+        if (error.message?.includes('Letter Types')) {
+          setAdminErrorMessage('Encountered an unknown error retrieving Letter Types.');
+        } else if (error.message?.includes('Headers')) {
+          setAdminErrorMessage(RETRIEVING_HEADERS_ERRORS);
+        } else {
+          toast.error('There was an error retrieving the organization.', {
+            position: 'top-center',
+            transition: Flip,
+            theme: 'dark',
+          });
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [id, setAdminFormData, setAdminFormSettings, setAdminErrorMessage]);
+
   if (loading) return <LoadingFallback />;
   return <OrganizationForm />;
 }
