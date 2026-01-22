@@ -1,4 +1,3 @@
-/* eslint-disable scribe/require-loading-check-for-axios */
 /* eslint-disable react/jsx-props-no-spreading */
 import { useContext, useEffect, useState } from 'react';
 
@@ -19,6 +18,47 @@ import { APP_API_ENDPOINT, createAuthenticatedAxios } from '../../http/authentic
 import { fetchHeader } from '../../http/headers';
 import { fetchOrganization } from '../../http/organizations';
 import CustomError from '../util/CustomError';
+
+// HTTP helper functions following the pattern from CreateLetter.jsx
+const axios = createAuthenticatedAxios();
+
+const fetchFormTypesForOrganization = async (organizationId) => {
+  const response = await axios.get(`${APP_API_ENDPOINT}/form_types/available_form_types_for_organization`, {
+    params: { organization_id: organizationId },
+  });
+  return response.data;
+};
+
+const fetchSourceSystems = async (parentCode) => {
+  const response = await axios.get(`${APP_API_ENDPOINT}/source_systems`, {
+    params: { parent_code: parentCode },
+  });
+  return response.data.data;
+};
+
+const fetchFilingTypes = async () => {
+  const response = await axios.get(`${APP_API_ENDPOINT}/filing_types`);
+  return response.data.data;
+};
+
+const fetchLetterTypesForCase = async (formType, organizationId) => {
+  const response = await axios.get(`${APP_API_ENDPOINT}/letter_types/letter_types_for_case`, {
+    params: { form_type: formType, organization_id: organizationId },
+  });
+  return response.data;
+};
+
+const fetchClassPreferencesForCase = async (formType) => {
+  const response = await axios.get(`${APP_API_ENDPOINT}/class_preferences/class_preferences_for_case`, {
+    params: { form_type: formType },
+  });
+  return response.data;
+};
+
+const createLetter = async (letterData) => {
+  const response = await axios.post(`${APP_API_ENDPOINT}/letters/`, letterData);
+  return response.data;
+};
 
 function CreateManualLetterContent() {
   const { currentUser } = useContext(AppContext);
@@ -48,7 +88,6 @@ function CreateManualLetterContent() {
   const [allLetterTypesList, setAllLetterTypeList] = useState([]);
   const [isVawaChecked, setIsVawaChecked] = useState(false);
   const [isVawaCheckboxDisabled, setIsVawaCheckboxDisabled] = useState(false);
-  const axios = createAuthenticatedAxios();
 
   const handleSourceSystemChange = (sourceSystemValues) => {
     // sourceSystemValues format: id|child_code
@@ -117,61 +156,40 @@ function CreateManualLetterContent() {
     }
 
     if (currentUser?.defaultOrg) {
-      axios
-        .get(`${APP_API_ENDPOINT}/form_types/available_form_types_for_organization`, {
-          params: { organization_id: currentUser.defaultOrg },
-        })
-        .then((response) => setFormTypeList(response.data))
-        .catch(() => {
-          toast.error('There was an error retrieving the Form Types list', {
-            position: 'top-center',
-            transition: Flip,
-            theme: 'dark',
-          });
-        });
+      const fetchInitialData = async () => {
+        Promise.allSettled([fetchFormTypesForOrganization(currentUser.defaultOrg), fetchSourceSystems(MAIN_PARENT_CODE), fetchFilingTypes()]).then(
+          (results) => {
+            const errors = [];
+            if (results[0].status === 'fulfilled') {
+              setFormTypeList(results[0].value);
+            } else {
+              errors.push('Form Types list');
+            }
+            if (results[1].status === 'fulfilled') {
+              setSourceSystemList(results[1].value);
+            } else {
+              errors.push('Source Systems list');
+            }
+            if (results[2].status === 'fulfilled') {
+              setFilingTypeList(results[2].value);
+            } else {
+              errors.push('Filing Types list');
+            }
+            if (errors.length > 0) {
+              const errorMessage = `There was an error retrieving: ${errors.join(', ')}`;
+              toast.error(errorMessage, {
+                position: 'top-center',
+                transition: Flip,
+                theme: 'dark',
+              });
+            }
+          }
+        );
+      };
 
-      axios
-        .get(`${APP_API_ENDPOINT}/source_systems?parent_code=${MAIN_PARENT_CODE}`, {}) // If we're presenting the list of source systems via UI for manual creation, we are using the Scribe API, i.e., parent_code: 'SCRIBE-API'
-        .then((response) => {
-          setSourceSystemList(response.data.data);
-        })
-        .catch(() => {
-          toast.error('There was an error retrieving the Source Systems list', {
-            position: 'top-center',
-            transition: Flip,
-            theme: 'dark',
-          });
-        });
-
-      axios
-        .get(`${APP_API_ENDPOINT}/filing_types`, {})
-        .then((response) => {
-          setFilingTypeList(response.data.data);
-        })
-        .catch(() => {
-          toast.error('There was an error retrieving the Filing Types list', {
-            position: 'top-center',
-            transition: Flip,
-            theme: 'dark',
-          });
-        });
+      fetchInitialData();
     }
   }, [currentUser?.defaultOrg]);
-
-  const fetchData = (endpoint, params, setState, errorMessage) => {
-    axios
-      .get(`${APP_API_ENDPOINT}/${endpoint}`, { params })
-      .then((response) => {
-        setState(response.data);
-      })
-      .catch(() => {
-        toast.error(errorMessage, {
-          position: 'top-center',
-          transition: Flip,
-          theme: 'dark',
-        });
-      });
-  };
 
   const displayVawaLetterTypes = (vawaCheckboxValue, allLetterTypes) => {
     if (vawaCheckboxValue === true) {
@@ -184,34 +202,36 @@ function CreateManualLetterContent() {
     }
   };
 
-  const loadLetterTypes = (params) => {
-    axios
-      .get(`${APP_API_ENDPOINT}/${'letter_types/letter_types_for_case'}`, { params })
-      .then((response) => {
-        setAllLetterTypeList(response.data);
-        displayVawaLetterTypes(isVawaChecked, response.data);
-      })
-      .catch(() => {
-        toast.error('There was an error retrieving the Letter Types list', {
-          position: 'top-center',
-          transition: Flip,
-          theme: 'dark',
-        });
+  const loadLetterTypes = async (formType, organizationId) => {
+    try {
+      const data = await fetchLetterTypesForCase(formType, organizationId);
+      setAllLetterTypeList(data);
+      displayVawaLetterTypes(isVawaChecked, data);
+    } catch (error) {
+      toast.error('There was an error retrieving the Letter Types list', {
+        position: 'top-center',
+        transition: Flip,
+        theme: 'dark',
       });
+    }
   };
 
-  const changeFormType = (formTypeValues) => {
+  const changeFormType = async (formTypeValues) => {
     const [selectedFormTypeCode, selectedFormTypeVawa] = formTypeValues.split('|');
     setFormTypeCode(selectedFormTypeCode);
     setFormTypeVawa(selectedFormTypeVawa);
-    loadLetterTypes({ form_type: selectedFormTypeCode, organization_id: currentUser.defaultOrg });
+    loadLetterTypes(selectedFormTypeCode, currentUser.defaultOrg);
 
-    fetchData(
-      'class_preferences/class_preferences_for_case',
-      { form_type: selectedFormTypeCode },
-      setClassPreferenceList,
-      'There was an error retrieving the Class Preferences list'
-    );
+    try {
+      const data = await fetchClassPreferencesForCase(selectedFormTypeCode);
+      setClassPreferenceList(data);
+    } catch (error) {
+      toast.error('There was an error retrieving the Class Preferences list', {
+        position: 'top-center',
+        transition: Flip,
+        theme: 'dark',
+      });
+    }
   };
 
   useEffect(() => {
@@ -273,21 +293,19 @@ function CreateManualLetterContent() {
       },
     };
 
-    axios
-      .post(`${APP_API_ENDPOINT}/letters/`, preppedFormData)
-      .then((response) => {
-        toast.success('The draft letter was created successfully!', {
-          position: 'top-center',
-          autoClose: 1000,
-          transition: Flip,
-          theme: 'dark',
-          toastId: 'toastCreateLetter',
-        });
-        redirect(`/draft/${response.data.id}`);
-      })
-      .catch((e) => {
-        setAdminErrorMessage(e?.response?.data?.error);
+    try {
+      const response = await createLetter(preppedFormData);
+      toast.success('The draft letter was created successfully!', {
+        position: 'top-center',
+        autoClose: 1000,
+        transition: Flip,
+        theme: 'dark',
+        toastId: 'toastCreateLetter',
       });
+      redirect(`/draft/${response.id}`);
+    } catch (e) {
+      setAdminErrorMessage(e?.response?.data?.error);
+    }
   };
 
   if (!location.state) {
