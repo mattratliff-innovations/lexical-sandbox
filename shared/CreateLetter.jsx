@@ -1,11 +1,20 @@
-import { useContext, useEffect, useState } from 'react';
+/* eslint-disable react/jsx-props-no-spreading */
+/* eslint-disable react-hooks/exhaustive-deps */
+import { useContext, useEffect, useRef, useState } from 'react';
 
 import { DrButton } from '@druid/druid';
 import { useForm } from 'react-hook-form';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Flip, toast } from 'react-toastify';
 
 import './CreateLetter.css';
+import {
+  fetchCreateLetterInitialData,
+  filterLetterTypesByFormTypeVawa,
+  prepLetterFormData,
+  processLetterInitialDataResults,
+  showErrorToast,
+  showSuccessToast,
+} from './CreateLetterHelperFunctions';
 import StandardParagraphSelector from './StandardParagraphSelector';
 import { AppContext } from '../../AppProvider';
 import { CheckBoxContainer, LabelContainer, StyledCheckbox, StyledHr, StyledLabel } from '../../components/designedComponents';
@@ -13,11 +22,7 @@ import { H1, H3 } from '../../components/typography';
 import { NON_VAWA_ONLY, VAWA_NON_VAWA, VAWA_ONLY } from '../../constants/vawa';
 import { AdminFormProvider, useAdminFormContext } from '../../contexts/AdminFormContext';
 import useMultiRequestLoading from '../../hooks/useMultiRequestLoading';
-import { APP_API_ENDPOINT, createAuthenticatedAxios } from '../../http/authenticatedAxios';
-import fetchClassPreferencesForCase from '../../http/class_preferences';
-import fetchFormTypeByCode from '../../http/form_types';
-import { fetchHeader } from '../../http/headers';
-import { fetchLetterTypesForForm } from '../../http/letter_types';
+import { createLetter } from '../../http/letters';
 import { fetchOrganization } from '../../http/organizations';
 import LoadingFallback from '../../utils/LoadingFallback';
 import CustomError from '../util/CustomError';
@@ -38,76 +43,97 @@ function CreateLetterContent() {
   const [allLetterTypesList, setAllLetterTypeList] = useState([]);
   const [letterTypeDisplayList, setLetterTypeDisplayList] = useState([]);
   const [letterTypeId, setLetterTypeId] = useState('');
-  const [letterCategoryHacIds, setLetterCaetgeoryHacIds] = useState([]);
+  const [letterCategoryHacIds, setLetterCategoryHacIds] = useState([]);
   const [classPreferenceList, setClassPreferenceList] = useState([]);
   const [classPreferenceId, setClassPreferenceId] = useState('');
   const [isClassPreferenceDisabled, setIsClassPreferenceDisabled] = useState(true);
   const [isLetterCategoryHacDisabled, setIsLetterCategoryHacDisabled] = useState(true);
   const [isVawaChecked, setIsVawaChecked] = useState(false);
   const [isVawaCheckboxDisabled, setIsVawaCheckboxDisabled] = useState(false);
-  const axios = createAuthenticatedAxios();
-  const { loading, markFinished } = useMultiRequestLoading(2);
+  const { loading, markFinished } = useMultiRequestLoading(1);
+  const hasFetchedRef = useRef(false);
+  const [letterTypeIdSelected, setLetterTypeIdSelected] = useState('');
 
   useEffect(() => {
     if (!location.state) {
       redirect('/search');
-      return;
     }
+  }, [location.state, redirect]);
+
+  /**
+   * Gets the list of form types, source systems, and filing types for initial page load
+   */
+  useEffect(() => {
+    if (!location.state || !currentUser?.defaultOrg || hasFetchedRef.current) return;
+
+    hasFetchedRef.current = true;
 
     const fetchInitialData = async () => {
-      Promise.all([
-        fetchLetterTypesForForm(currentUser.defaultOrg, location.state.createLetterObj?.registration?.formTypeName),
-        fetchClassPreferencesForCase(location.state.createLetterObj?.registration?.formTypeName),
-        fetchFormTypeByCode(location.state.createLetterObj?.registration?.formTypeName),
-      ])
+      fetchCreateLetterInitialData(currentUser.defaultOrg, location.state.createLetterObj?.registration?.formTypeName)
         .then((results) => {
-          // With Promise.all, results is just [value1, value2, value3]
-          // No .status or .value properties
-          setLetterTypeDisplayList(results[0]);
-          setAllLetterTypeList(results[0]);
-          setClassPreferenceList(results[1]);
-          setFormTypeByCode(results[2]);
+          const { data, errors } = processLetterInitialDataResults(results);
+
+          if (data.letterTypeDisplayList) setLetterTypeDisplayList(data.allLetterTypes);
+          if (data.allLetterTypes) setAllLetterTypeList(data.allLetterTypes);
+          if (data.classPreferences) setClassPreferenceList(data.classPreferences);
+          if (data.formType) setFormTypeByCode(data.formType);
+
+          if (errors.length > 0) {
+            const errorMessage = `There was an error retrieving: ${errors.join(', ')}`;
+            showErrorToast(errorMessage);
+          }
         })
-        .catch((error) => {
-          // If ANY call fails, this runs
-          console.error('Error loading initial data:', error);
-          toast.error('There was an error loading the page. Please try again.', {
-            position: 'top-center',
-            transition: Flip,
-            theme: 'dark',
-          });
-        })
-        .finally(() => markFinished());
+        .finally(() => {
+          markFinished();
+        });
     };
 
     fetchInitialData();
-  }, [currentUser.defaultOrg, location.state, redirect]);
+  }, [currentUser.defaultOrg]);
 
+  /**
+   * Sets the state variables for the letter types and VAWA
+   */
   useEffect(() => {
+    const filteredLetterTypes = filterLetterTypesByFormTypeVawa(allLetterTypesList, formTypeByCode?.vawaCategory?.name);
+    setLetterTypeDisplayList(filteredLetterTypes);
+
     if (formTypeByCode?.vawaCategory?.name === VAWA_ONLY) {
-      const vawaLetterTypesArray = allLetterTypesList.filter(
-        (item) => item.vawaCategory?.name === VAWA_ONLY || item.vawaCategory?.name === VAWA_NON_VAWA
-      );
-      setLetterTypeDisplayList(vawaLetterTypesArray);
       setIsVawaChecked(true);
       setIsVawaCheckboxDisabled(true);
       setValue('vawa', true);
     } else if (formTypeByCode?.vawaCategory?.name === NON_VAWA_ONLY) {
-      const vawaLetterTypesArray = allLetterTypesList.filter(
-        (item) => item.vawaCategory?.name === NON_VAWA_ONLY || item.vawaCategory?.name === VAWA_NON_VAWA
-      );
-      setLetterTypeDisplayList(vawaLetterTypesArray);
       setIsVawaChecked(false);
       setIsVawaCheckboxDisabled(true);
       setValue('vawa', false);
     } else {
-      setLetterTypeDisplayList(allLetterTypesList);
       setIsVawaChecked(false);
       setIsVawaCheckboxDisabled(false);
     }
-  }, [allLetterTypesList, formTypeByCode]);
+  }, [allLetterTypesList, formTypeByCode, setValue]);
 
+  /**
+   * Creates the new letter
+   * @param {form data} data
+   */
+  const onSubmit = async (data) => {
+    const organization = await fetchOrganization(currentUser.defaultOrg);
+    // eslint-disable-next-line no-param-reassign
+    data.letterTypeId = letterTypeIdSelected;
+    const preppedFormData = await prepLetterFormData(data, organization, location, currentUser);
+
+    try {
+      const response = await createLetter(preppedFormData);
+      showSuccessToast('The draft letter was created successfully!');
+      redirect(`/draft/${response.id}`);
+    } catch (e) {
+      setAdminErrorMessage(e?.response?.data?.error);
+    }
+  };
+
+  // HANDLERS
   const handleVawaCheckboxChange = (event) => {
+    setIsVawaChecked(event.target.checked);
     if (event.target.checked === true) {
       const vawaLetterTypesArray = allLetterTypesList.filter(
         (item) => item.vawaCategory?.name === VAWA_ONLY || item.vawaCategory?.name === VAWA_NON_VAWA
@@ -116,27 +142,27 @@ function CreateLetterContent() {
     } else {
       setLetterTypeDisplayList(allLetterTypesList);
     }
-    setIsVawaChecked(event.target.checked);
   };
 
-  const handleLetterTypeChange = (event) => {
-    const selectedLetterTypeId = event.target.value;
+  const handleLetterTypeChange = (letterTypeValues) => {
+    // Parse the value as "id|vawaCategory"
+    const [selectedLetterTypeId, selectedLetterTypeVawa] = letterTypeValues.split('|');
+    setLetterTypeIdSelected(selectedLetterTypeId);
 
     // Only when formType is VAWA_NON_VAWA
     if (formTypeByCode?.vawaCategory?.name === VAWA_NON_VAWA) {
-      const selectedLetterTypeObj = allLetterTypesList.filter((item) => item?.id === selectedLetterTypeId);
-      if (selectedLetterTypeObj[0]?.vawaCategory?.name === VAWA_ONLY) {
+      if (selectedLetterTypeVawa === VAWA_ONLY) {
         setValue('vawa', true);
-      } else if (selectedLetterTypeObj[0]?.vawaCategory?.name === NON_VAWA_ONLY) {
+      } else if (selectedLetterTypeVawa === NON_VAWA_ONLY) {
         setValue('vawa', false);
-      } else if (selectedLetterTypeObj[0]?.vawaCategory?.name === VAWA_NON_VAWA && isVawaChecked) {
+      } else if (selectedLetterTypeVawa === VAWA_NON_VAWA && isVawaChecked) {
         setValue('vawa', true);
-      } else if (selectedLetterTypeObj[0]?.vawaCategory?.name === VAWA_NON_VAWA) {
+      } else if (selectedLetterTypeVawa === VAWA_NON_VAWA) {
         setValue('vawa', false);
       }
     }
-    // Only when the associated letter type has a letter category of Request for Evidence
 
+    // Only when the associated letter type has a letter category of Request for Evidence
     const selectedLetterType = allLetterTypesList.find((letterType) => letterType.id === selectedLetterTypeId);
 
     if (
@@ -144,12 +170,11 @@ function CreateLetterContent() {
       selectedLetterType?.letterCategory &&
       selectedLetterType?.letterCategory.name.toLowerCase() === 'request for evidence'
     ) {
-      setLetterCaetgeoryHacIds(selectedLetterType.letterCategory.letterCategoryHacs);
+      setLetterCategoryHacIds(selectedLetterType.letterCategory.letterCategoryHacs);
       setIsLetterCategoryHacDisabled(false);
     } else {
-      setLetterCaetgeoryHacIds([]);
+      setLetterCategoryHacIds([]);
       setIsLetterCategoryHacDisabled(true);
-      setValue('letterCategoryHacId', '');
     }
 
     setClassPreferenceId('');
@@ -160,81 +185,6 @@ function CreateLetterContent() {
 
   const handleClassPreference = (event) => {
     setClassPreferenceId(event.target.value);
-  };
-
-  const getHeaderFromOrganization = (organization) => {
-    if (organization.headerId) return organization.headerId;
-
-    const xrefs = organization.organizationHeaderLetterTypeXrefs.find((xref) => xref.letterType.id === letterTypeId);
-    if (xrefs) {
-      return xrefs.header.id;
-    }
-    return null;
-  };
-
-  // Makes address into addressAttributes, etc
-  const prepFormData = async (data, organization) => {
-    const draft = JSON.parse(JSON.stringify(location.state.createLetterObj));
-
-    // assign the header based on the header used in the organization
-    if (draft.headerId === null) draft.headerId = getHeaderFromOrganization(organization);
-
-    draft.header = await fetchHeader(draft.headerId);
-    const newPetitioner = draft.petitionerType;
-    if (newPetitioner) {
-      newPetitioner.addressAttributes = draft.petitionerType?.address;
-      delete newPetitioner.address;
-    }
-
-    const newRepresentative = draft.representativeType;
-    if (newRepresentative) {
-      newRepresentative.addressAttributes = draft.representativeType?.address;
-      delete newRepresentative.address;
-    }
-
-    const apiFriendlyHash = {
-      registrationAttributes: draft.registration,
-      applicantTypesAttributes: draft.applicantTypes.map((applicant) => {
-        const newApplicant = { ...applicant };
-        newApplicant.addressAttributes = newApplicant.address;
-        delete newApplicant.address;
-        return newApplicant;
-      }),
-      petitionerTypeAttributes: newPetitioner,
-      representativeTypeAttributes: newRepresentative,
-      standardParagraphIds: data.includedStdParagraphsInput,
-      filingTypeAttributes: draft.filingType,
-      ...draft,
-    };
-
-    ['registration', 'applicantTypes', 'petitionerType', 'representativeType', 'filingType'].forEach((prop) => {
-      delete apiFriendlyHash[prop];
-    });
-
-    apiFriendlyHash.letterTypeId = data.letterTypeId;
-    apiFriendlyHash.organizationId = currentUser.defaultOrg;
-    apiFriendlyHash.vawa = data.vawa;
-    apiFriendlyHash.letterCategoryHacId = data.letterCategoryHacId;
-
-    return apiFriendlyHash;
-  };
-
-  const onSubmit = async (data) => {
-    const organization = await fetchOrganization(currentUser.defaultOrg);
-    const preppedFormData = await prepFormData(data, organization);
-    axios
-      .post(`${APP_API_ENDPOINT}/letters/`, preppedFormData)
-      .then((response) => {
-        toast.success('The draft letter was created successfully!', {
-          position: 'top-center',
-          autoClose: 1000,
-          transition: Flip,
-          theme: 'dark',
-          toastId: 'toastCreateLetter',
-        });
-        redirect(`/draft/${response.data.id}`);
-      })
-      .catch((e) => setAdminErrorMessage(e?.response?.data?.error));
   };
 
   if (!location.state) {
@@ -272,14 +222,7 @@ function CreateLetterContent() {
             </LabelContainer>
           </CheckBoxContainer>
 
-          <input
-            // eslint-disable-next-line react/jsx-props-no-spreading
-            {...register('vawa')}
-            type="hidden"
-            id="vawa"
-            data-testid="vawa"
-            value={isVawaChecked ? 'true' : 'false'}
-          />
+          <input {...register('vawa')} type="hidden" id="vawa" data-testid="vawa" value={isVawaChecked ? 'true' : 'false'} />
         </div>
       </div>
 
@@ -291,18 +234,21 @@ function CreateLetterContent() {
           </label>
 
           <select
-            // eslint-disable-next-line react/jsx-props-no-spreading
             {...register('letterTypeId', { required: { value: true } })}
             id="letterTypeId"
             data-testid="letterTypeId"
             className="form-select form-select-lg"
-            onChange={handleLetterTypeChange}>
+            onChange={(e) => {
+              handleLetterTypeChange(e.target.value);
+            }}
+            aria-required="true">
             <option value="">--- Select Letter Type ---</option>
-            {letterTypeDisplayList?.map((lettertype) => (
-              <option key={lettertype.id} value={lettertype.id} data-testid={`letterTypeId_${lettertype.id}`}>
-                {lettertype.name}
-              </option>
-            ))}
+            {Array.isArray(letterTypeDisplayList) &&
+              letterTypeDisplayList?.map((lettertype) => (
+                <option key={lettertype.id} value={`${lettertype.id}|${lettertype.vawaCategory.name}`} data-testid={`letterTypeId_${lettertype.id}`}>
+                  {lettertype.name}
+                </option>
+              ))}
           </select>
         </div>
 
@@ -312,7 +258,6 @@ function CreateLetterContent() {
           </label>
 
           <select
-            // eslint-disable-next-line react/jsx-props-no-spreading
             {...register('classPreferenceId', { required: { value: false } })}
             id="classPreferenceId"
             data-testid="classPreferenceId"
@@ -322,11 +267,12 @@ function CreateLetterContent() {
             <option value="">
               {classPreferenceList?.length === 0 ? '--- No Available Class Preferences ---' : '--- Select Class Preference ---'}
             </option>
-            {classPreferenceList?.map((cp) => (
-              <option key={cp.id} value={cp.id} data-testid={`classPreferenceId_${cp.id}`}>
-                {cp.name}
-              </option>
-            ))}
+            {Array.isArray(classPreferenceList) &&
+              classPreferenceList?.map((cp) => (
+                <option key={cp.id} value={cp.id} data-testid={`classPreferenceId_${cp.id}`}>
+                  {cp.name}
+                </option>
+              ))}
           </select>
         </div>
       </div>
@@ -339,7 +285,6 @@ function CreateLetterContent() {
           </label>
 
           <select
-            // eslint-disable-next-line react/jsx-props-no-spreading
             {...register('letterCategoryHacId', { required: { value: !isLetterCategoryHacDisabled } })}
             id="letterCategoryHacId"
             aria-required="true"
@@ -349,11 +294,12 @@ function CreateLetterContent() {
             <option value="" data-testid="letterCategoryHacId_default">
               --- Select HAC ---
             </option>
-            {letterCategoryHacIds.map((lch) => (
-              <option key={lch.id} value={lch.id} data-testid={`letterCategoryHacId_${lch.id}`}>
-                {lch.name}
-              </option>
-            ))}
+            {Array.isArray(letterCategoryHacIds) &&
+              letterCategoryHacIds.map((lch) => (
+                <option key={lch.id} value={lch.id} data-testid={`letterCategoryHacId_${lch.id}`}>
+                  {lch.name}
+                </option>
+              ))}
           </select>
         </div>
       </div>

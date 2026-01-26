@@ -1,64 +1,34 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 /* eslint-disable react/jsx-props-no-spreading */
-import { useContext, useEffect, useState } from 'react';
+import { useContext, useEffect, useRef, useState } from 'react';
 
 import { DrButton } from '@druid/druid';
 import { useForm } from 'react-hook-form';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Flip, toast } from 'react-toastify';
 
 import './CreateLetter.css';
+import {
+  changeFormTypeHelper,
+  fetchCreateManualLetterInitialData,
+  filingTypeDisplayName,
+  filterLetterTypesByFormTypeVawa,
+  prepManualLetterFormData,
+  processManualLetterInitialDataResults,
+  showErrorToast,
+  showSuccessToast,
+} from './CreateLetterHelperFunctions';
 import StandardParagraphSelector from './StandardParagraphSelector';
 import { AppContext } from '../../AppProvider';
 import { CheckBoxContainer, LabelContainer, StyledCheckbox, StyledHr, StyledLabel } from '../../components/designedComponents';
 import { H1, H3 } from '../../components/typography';
-import { DEFAULT_FILING_TYPE_FOR_ELIS, ELIS, FILING_TYPE_DISPLAY_NAMES, MAIN_PARENT_CODE } from '../../constants/selectOptions';
+import { DEFAULT_FILING_TYPE_FOR_ELIS, ELIS, MAIN_PARENT_CODE } from '../../constants/selectOptions';
 import { NON_VAWA_ONLY, VAWA_NON_VAWA, VAWA_ONLY } from '../../constants/vawa';
 import { AdminFormProvider, useAdminFormContext } from '../../contexts/AdminFormContext';
-import { APP_API_ENDPOINT, createAuthenticatedAxios } from '../../http/authenticatedAxios';
-import { fetchHeader } from '../../http/headers';
+import useMultiRequestLoading from '../../hooks/useMultiRequestLoading';
+import { createLetter } from '../../http/letters';
 import { fetchOrganization } from '../../http/organizations';
+import LoadingFallback from '../../utils/LoadingFallback';
 import CustomError from '../util/CustomError';
-
-// HTTP helper functions following the pattern from CreateLetter.jsx
-const axios = createAuthenticatedAxios();
-
-const fetchFormTypesForOrganization = async (organizationId) => {
-  const response = await axios.get(`${APP_API_ENDPOINT}/form_types/available_form_types_for_organization`, {
-    params: { organization_id: organizationId },
-  });
-  return response.data;
-};
-
-const fetchSourceSystems = async (parentCode) => {
-  const response = await axios.get(`${APP_API_ENDPOINT}/source_systems`, {
-    params: { parent_code: parentCode },
-  });
-  return response.data.data;
-};
-
-const fetchFilingTypes = async () => {
-  const response = await axios.get(`${APP_API_ENDPOINT}/filing_types`);
-  return response.data.data;
-};
-
-const fetchLetterTypesForCase = async (formType, organizationId) => {
-  const response = await axios.get(`${APP_API_ENDPOINT}/letter_types/letter_types_for_case`, {
-    params: { form_type: formType, organization_id: organizationId },
-  });
-  return response.data;
-};
-
-const fetchClassPreferencesForCase = async (formType) => {
-  const response = await axios.get(`${APP_API_ENDPOINT}/class_preferences/class_preferences_for_case`, {
-    params: { form_type: formType },
-  });
-  return response.data;
-};
-
-const createLetter = async (letterData) => {
-  const response = await axios.post(`${APP_API_ENDPOINT}/letters/`, letterData);
-  return response.data;
-};
 
 function CreateManualLetterContent() {
   const { currentUser } = useContext(AppContext);
@@ -81,50 +51,116 @@ function CreateManualLetterContent() {
   const [letterTypeDisplayList, setLetterTypeDisplayList] = useState([]);
   const [letterTypeId, setLetterTypeId] = useState('');
   const [letterTypeIdSelected, setLetterTypeIdSelected] = useState('');
-  const [letterTypeVawa, setLetterTypeVawa] = useState('');
+  // const [, setLetterTypeVawa] = useState('');
   const [classPreferenceList, setClassPreferenceList] = useState([]);
   const [classPreferenceId, setClassPreferenceId] = useState('');
   const [isClassPreferenceDisabled, setIsClassPreferenceDisabled] = useState(true);
   const [allLetterTypesList, setAllLetterTypeList] = useState([]);
   const [isVawaChecked, setIsVawaChecked] = useState(false);
   const [isVawaCheckboxDisabled, setIsVawaCheckboxDisabled] = useState(false);
+  const { loading, markFinished } = useMultiRequestLoading(1);
+  const hasFetchedRef = useRef(false);
 
-  const handleSourceSystemChange = (sourceSystemValues) => {
-    // sourceSystemValues format: id|child_code
-    const [selectedSourceSystemId, selectedSourceSystemChildCode] = sourceSystemValues.split('|');
-    setSourceSystemId(selectedSourceSystemId);
+  useEffect(() => {
+    if (!location.state) {
+      redirect('/search');
+    }
+  }, [location.state, redirect]);
 
-    const isELIS = selectedSourceSystemChildCode === ELIS;
+  /**
+   * Gets the list of form types, source systems, and filing types for initial page load
+   */
+  useEffect(() => {
+    if (!location.state || !currentUser?.defaultOrg || hasFetchedRef.current) return;
 
-    const filingTypeSelect = document.querySelector('#filingTypeId');
-    if (isELIS) {
-      filingTypeSelect.setAttribute('disabled', '');
-      setFilingTypeName(DEFAULT_FILING_TYPE_FOR_ELIS);
-      setValue('filingTypeId', DEFAULT_FILING_TYPE_FOR_ELIS);
+    hasFetchedRef.current = true;
+
+    const fetchInitialData = async () => {
+      fetchCreateManualLetterInitialData(currentUser.defaultOrg, MAIN_PARENT_CODE)
+        .then((results) => {
+          const { data, errors } = processManualLetterInitialDataResults(results);
+
+          if (data.formTypes) setFormTypeList(data.formTypes);
+          if (data.sourceSystems) setSourceSystemList(data.sourceSystems.data);
+          if (data.filingTypes) setFilingTypeList(data.filingTypes.data);
+
+          if (errors.length > 0) {
+            const errorMessage = `There was an error retrieving: ${errors.join(', ')}`;
+            showErrorToast(errorMessage);
+          }
+        })
+        .finally(() => {
+          markFinished();
+        });
+    };
+
+    fetchInitialData();
+  }, [currentUser.defaultOrg]);
+
+  /**
+   * Sets the state variables for the letter types and VAWA
+   */
+  useEffect(() => {
+    const filteredLetterTypes = filterLetterTypesByFormTypeVawa(allLetterTypesList, formTypeVawa);
+    setLetterTypeDisplayList(filteredLetterTypes);
+
+    if (formTypeVawa === VAWA_ONLY) {
+      setIsVawaChecked(true);
+      setIsVawaCheckboxDisabled(true);
+      setValue('vawa', true);
+    } else if (formTypeVawa === NON_VAWA_ONLY) {
+      setIsVawaChecked(false);
+      setIsVawaCheckboxDisabled(true);
+      setValue('vawa', false);
     } else {
-      setValue('filingTypeId', '');
-      filingTypeSelect.removeAttribute('disabled');
+      setIsVawaChecked(false);
+      setIsVawaCheckboxDisabled(false);
+    }
+  }, [formTypeVawa, allLetterTypesList, setValue]);
+
+  /**
+   * Creates the new letter
+   * @param {form data} data
+   */
+  const onSubmit = async (data) => {
+    const organization = await fetchOrganization(currentUser.defaultOrg);
+
+    const preppedFormData = await prepManualLetterFormData(
+      data,
+      organization,
+      location,
+      formTypeCode,
+      letterTypeIdSelected,
+      currentUser,
+      sourceSystemId,
+      filingTypeName
+    );
+
+    try {
+      const response = await createLetter(preppedFormData);
+      showSuccessToast('The draft letter was created successfully!');
+      redirect(`/draft/${response.id}`);
+    } catch (e) {
+      setAdminErrorMessage(e?.response?.data?.error);
     }
   };
 
-  const handleFilingType = (filingTypeValue) => {
-    setFilingTypeName(filingTypeValue);
-  };
-
-  const filingTypeDisplayName = (value) => {
-    const expectedFilingType = Object.keys(FILING_TYPE_DISPLAY_NAMES).find((type) => type === value);
-
-    if (expectedFilingType) {
-      return FILING_TYPE_DISPLAY_NAMES[value];
+  // HANDLERS
+  const handleVawaCheckboxChange = (event) => {
+    setIsVawaChecked(event.target.checked);
+    if (event.target.checked === true) {
+      const vawaLetterTypesArray = allLetterTypesList.filter(
+        (item) => item.vawaCategory?.name === VAWA_ONLY || item.vawaCategory?.name === VAWA_NON_VAWA
+      );
+      setLetterTypeDisplayList(vawaLetterTypesArray);
+    } else {
+      setLetterTypeDisplayList(allLetterTypesList);
     }
-
-    return value;
   };
 
   const handleLetterTypeChange = (letterTypeValues) => {
     const [selectedLetterTypeId, selectedLetterTypeVawa] = letterTypeValues.split('|');
     setLetterTypeIdSelected(selectedLetterTypeId);
-    setLetterTypeVawa(selectedLetterTypeVawa);
 
     // Only when formType is VAWA_NON_VAWA
     if (formTypeVawa === VAWA_NON_VAWA) {
@@ -149,173 +185,42 @@ function CreateManualLetterContent() {
     setClassPreferenceId(event.target.value);
   };
 
-  useEffect(() => {
-    if (!location.state) {
-      redirect('/search');
-      return;
-    }
+  const handleSourceSystemChange = (sourceSystemValues) => {
+    // sourceSystemValues format: id|child_code
+    const [selectedSourceSystemId, selectedSourceSystemChildCode] = sourceSystemValues.split('|');
+    setSourceSystemId(selectedSourceSystemId);
 
-    if (currentUser?.defaultOrg) {
-      const fetchInitialData = async () => {
-        Promise.allSettled([fetchFormTypesForOrganization(currentUser.defaultOrg), fetchSourceSystems(MAIN_PARENT_CODE), fetchFilingTypes()]).then(
-          (results) => {
-            const errors = [];
-            if (results[0].status === 'fulfilled') {
-              setFormTypeList(results[0].value);
-            } else {
-              errors.push('Form Types list');
-            }
-            if (results[1].status === 'fulfilled') {
-              setSourceSystemList(results[1].value);
-            } else {
-              errors.push('Source Systems list');
-            }
-            if (results[2].status === 'fulfilled') {
-              setFilingTypeList(results[2].value);
-            } else {
-              errors.push('Filing Types list');
-            }
-            if (errors.length > 0) {
-              const errorMessage = `There was an error retrieving: ${errors.join(', ')}`;
-              toast.error(errorMessage, {
-                position: 'top-center',
-                transition: Flip,
-                theme: 'dark',
-              });
-            }
-          }
-        );
-      };
+    const isELIS = selectedSourceSystemChildCode === ELIS;
 
-      fetchInitialData();
-    }
-  }, [currentUser?.defaultOrg]);
-
-  const displayVawaLetterTypes = (vawaCheckboxValue, allLetterTypes) => {
-    if (vawaCheckboxValue === true) {
-      const vawaLetterTypesArray = allLetterTypes.filter(
-        (item) => item.vawaCategory?.name === VAWA_ONLY || item.vawaCategory?.name === VAWA_NON_VAWA
-      );
-      setLetterTypeDisplayList(vawaLetterTypesArray);
+    const filingTypeSelect = document.querySelector('#filingTypeId');
+    if (isELIS) {
+      filingTypeSelect.setAttribute('disabled', '');
+      setFilingTypeName(DEFAULT_FILING_TYPE_FOR_ELIS);
+      setValue('filingTypeId', DEFAULT_FILING_TYPE_FOR_ELIS);
     } else {
-      setLetterTypeDisplayList(allLetterTypes);
+      setValue('filingTypeId', '');
+      filingTypeSelect.removeAttribute('disabled');
     }
   };
 
-  const loadLetterTypes = async (formType, organizationId) => {
-    try {
-      const data = await fetchLetterTypesForCase(formType, organizationId);
-      setAllLetterTypeList(data);
-      displayVawaLetterTypes(isVawaChecked, data);
-    } catch (error) {
-      toast.error('There was an error retrieving the Letter Types list', {
-        position: 'top-center',
-        transition: Flip,
-        theme: 'dark',
-      });
-    }
+  const handleFilingType = (filingTypeValue) => {
+    setFilingTypeName(filingTypeValue);
   };
 
-  const changeFormType = async (formTypeValues) => {
-    const [selectedFormTypeCode, selectedFormTypeVawa] = formTypeValues.split('|');
-    setFormTypeCode(selectedFormTypeCode);
-    setFormTypeVawa(selectedFormTypeVawa);
-    loadLetterTypes(selectedFormTypeCode, currentUser.defaultOrg);
-
-    try {
-      const data = await fetchClassPreferencesForCase(selectedFormTypeCode);
-      setClassPreferenceList(data);
-    } catch (error) {
-      toast.error('There was an error retrieving the Class Preferences list', {
-        position: 'top-center',
-        transition: Flip,
-        theme: 'dark',
-      });
-    }
-  };
-
-  useEffect(() => {
-    if (formTypeVawa === VAWA_ONLY) {
-      const vawaLetterTypesArray = allLetterTypesList.filter(
-        (item) => item.vawaCategory?.name === VAWA_ONLY || item.vawaCategory?.name === VAWA_NON_VAWA
-      );
-      setLetterTypeDisplayList(vawaLetterTypesArray);
-      setIsVawaChecked(true);
-      setIsVawaCheckboxDisabled(true);
-      setValue('vawa', true);
-    } else if (formTypeVawa === NON_VAWA_ONLY) {
-      const vawaLetterTypesArray = allLetterTypesList.filter(
-        (item) => item.vawaCategory?.name === NON_VAWA_ONLY || item.vawaCategory?.name === VAWA_NON_VAWA
-      );
-      setLetterTypeDisplayList(vawaLetterTypesArray);
-      setIsVawaChecked(false);
-      setIsVawaCheckboxDisabled(true);
-      setValue('vawa', false);
-    } else {
-      setLetterTypeDisplayList(allLetterTypesList);
-      setIsVawaChecked(false);
-      setIsVawaCheckboxDisabled(false);
-    }
-  }, [formTypeVawa, allLetterTypesList]);
-
-  const getHeaderFromOrganization = (organization) => {
-    if (organization.headerId) return organization.headerId;
-
-    const xrefs = organization.organizationHeaderLetterTypeXrefs.find((xref) => xref.letterType.id === letterTypeId);
-    if (xrefs) {
-      return xrefs.header.id;
-    }
-    return null;
-  };
-
-  const onSubmit = async (data) => {
-    const organization = await fetchOrganization(currentUser.defaultOrg);
-    data.headerId = getHeaderFromOrganization(organization);
-    data.header = await fetchHeader(data.headerId);
-
-    const preppedFormData = {
-      registrationAttributes: {
-        id: null,
-        receiptNumber: location.state.createLetterObj.registration.receiptNumber,
-        formTypeName: formTypeCode,
-      },
-      id: null,
-      headerId: data.headerId,
-      header: data.header,
-      letterTypeId: letterTypeIdSelected,
-      organizationId: currentUser.defaultOrg,
-      manualCreation: true,
-      standardParagraphIds: data.includedStdParagraphsInput,
-      vawa: data.vawa,
-      sourceSystemId,
-      filingTypeAttributes: {
-        name: filingTypeName,
-      },
-    };
-
-    try {
-      const response = await createLetter(preppedFormData);
-      toast.success('The draft letter was created successfully!', {
-        position: 'top-center',
-        autoClose: 1000,
-        transition: Flip,
-        theme: 'dark',
-        toastId: 'toastCreateLetter',
-      });
-      redirect(`/draft/${response.id}`);
-    } catch (e) {
-      setAdminErrorMessage(e?.response?.data?.error);
-    }
+  const handleChangeFormType = async (formTypeValues) => {
+    const result = await changeFormTypeHelper(formTypeValues, currentUser.defaultOrg, isVawaChecked);
+    setFormTypeCode(result.selectedFormTypeCode);
+    setFormTypeVawa(result.selectedFormTypeVawa);
+    setAllLetterTypeList(result.allLetterTypes);
+    setLetterTypeDisplayList(result.filteredLetterTypes);
+    setClassPreferenceList(result.classPreferences);
   };
 
   if (!location.state) {
     return <>Redirecting...</>;
   }
 
-  const handleVawaCheckboxChange = (event) => {
-    setIsVawaChecked(event.target.checked);
-    displayVawaLetterTypes(event.target.checked, allLetterTypesList);
-  };
+  if (loading) return <LoadingFallback />;
 
   return (
     <form className="mb-4">
@@ -345,14 +250,15 @@ function CreateManualLetterContent() {
             }}
             aria-required="true">
             <option value="">--- Select Source System ---</option>
-            {sourceSystemList.map((sourceSystem) => (
-              <option
-                key={sourceSystem.id}
-                value={`${sourceSystem.id}|${sourceSystem.attributes.childCode}`}
-                data-testid={`sourceSystemId_${sourceSystem.id}`}>
-                {sourceSystem.attributes.childCode}
-              </option>
-            ))}
+            {Array.isArray(sourceSystemList) &&
+              sourceSystemList.map((sourceSystem) => (
+                <option
+                  key={sourceSystem.id}
+                  value={`${sourceSystem.id}|${sourceSystem.attributes.childCode}`}
+                  data-testid={`sourceSystemId_${sourceSystem.id}`}>
+                  {sourceSystem.attributes.childCode}
+                </option>
+              ))}
           </select>
         </div>
 
@@ -371,11 +277,12 @@ function CreateManualLetterContent() {
             }}
             aria-required="true">
             <option value="">--- Select Filing Type ---</option>
-            {filingTypeList.map((filingType) => (
-              <option key={filingType.id} value={filingType.attributes.name} data-testid={`filingTypeId_${filingType.id}`}>
-                {filingTypeDisplayName(filingType.attributes.name)}
-              </option>
-            ))}
+            {Array.isArray(filingTypeList) &&
+              filingTypeList.map((filingType) => (
+                <option key={filingType.id} value={filingType.attributes.name} data-testid={`filingTypeId_${filingType.id}`}>
+                  {filingTypeDisplayName(filingType.attributes.name)}
+                </option>
+              ))}
           </select>
         </div>
       </div>
@@ -393,15 +300,16 @@ function CreateManualLetterContent() {
             data-testid="formTypeId"
             className="form-select form-select-lg"
             onChange={(e) => {
-              changeFormType(e.target.value);
+              handleChangeFormType(e.target.value);
             }}
             aria-required="true">
             <option value="">--- Choose Form Type ---</option>
-            {formTypeList.map((formtype) => (
-              <option key={formtype.id} value={`${formtype.code}|${formtype.vawaCategory.name}`} data-testid={`formTypeId_${formtype.id}`}>
-                {formtype.name}
-              </option>
-            ))}
+            {Array.isArray(formTypeList) &&
+              formTypeList.map((formtype) => (
+                <option key={formtype.id} value={`${formtype.code}|${formtype.vawaCategory.name}`} data-testid={`formTypeId_${formtype.id}`}>
+                  {formtype.name}
+                </option>
+              ))}
           </select>
         </div>
       </div>
@@ -446,11 +354,12 @@ function CreateManualLetterContent() {
             }}
             aria-required="true">
             <option value="">--- Select Letter Type ---</option>
-            {letterTypeDisplayList.map((lettertype) => (
-              <option key={lettertype.id} value={`${lettertype.id}|${lettertype.vawaCategory.name}`} data-testid={`letterTypeId_${lettertype.id}`}>
-                {lettertype.name}
-              </option>
-            ))}
+            {Array.isArray(letterTypeDisplayList) &&
+              letterTypeDisplayList.map((lettertype) => (
+                <option key={lettertype.id} value={`${lettertype.id}|${lettertype.vawaCategory.name}`} data-testid={`letterTypeId_${lettertype.id}`}>
+                  {lettertype.name}
+                </option>
+              ))}
           </select>
         </div>
 
@@ -469,11 +378,12 @@ function CreateManualLetterContent() {
             <option value="">
               {classPreferenceList.length === 0 ? '--- No Available Class Preferences ---' : '--- Select Class Preference ---'}
             </option>
-            {classPreferenceList.map((cp) => (
-              <option key={cp.id} value={cp.id} data-testid={`classPreferenceId_${cp.id}`}>
-                {cp.name}
-              </option>
-            ))}
+            {Array.isArray(classPreferenceList) &&
+              classPreferenceList.map((cp) => (
+                <option key={cp.id} value={cp.id} data-testid={`classPreferenceId_${cp.id}`}>
+                  {cp.name}
+                </option>
+              ))}
           </select>
         </div>
       </div>
