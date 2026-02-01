@@ -168,6 +168,12 @@ export function LetterChangeTracker({
     resetStructure 
   } = useLetterStructureTracking(letter, initialLetter);
 
+  // Store checkForChanges in ref to avoid recreating on every render
+  const checkForChangesRef = useRef(checkForChanges);
+  useEffect(() => {
+    checkForChangesRef.current = checkForChanges;
+  }, [checkForChanges]);
+
   // Track section editor changes (reactive - tracked on every edit)
   const [dirtySectionEditors, setDirtySectionEditors] = useState(new Set());
   const [sectionEditorTracking, setSectionEditorTracking] = useState({});
@@ -225,7 +231,7 @@ export function LetterChangeTracker({
     setDirtySectionEditors(new Set());
   }, [resetStructure, sectionEditorTracking]);
 
-  // Notify parent of changes (only editor changes tracked reactively)
+  // Notify parent of changes (only when actual tracked values change)
   useEffect(() => {
     if (onLetterChange) {
       onLetterChange({
@@ -234,7 +240,6 @@ export function LetterChangeTracker({
         hasEditorChanges,
         structureChangeType,
         dirtySections: Array.from(dirtySectionEditors),
-        checkForChanges, // Pass function to check structure changes on demand
         changeDetails: {
           outerFields: structureChangeType === 'outer_fields',
           sectionsCount: structureChangeType === 'sections_count',
@@ -248,8 +253,7 @@ export function LetterChangeTracker({
     hasStructureChanges, 
     hasEditorChanges, 
     structureChangeType,
-    dirtySectionEditors,
-    checkForChanges,
+    dirtySectionEditors.size, // Use size instead of the set itself
     onLetterChange
   ]);
 
@@ -261,7 +265,7 @@ export function LetterChangeTracker({
     hasEditorChanges,
     structureChangeType,
     dirtySections: Array.from(dirtySectionEditors),
-    checkForChanges, // NEW: Function to check structure changes on demand
+    checkForChanges: checkForChangesRef.current, // Pass stable ref
     
     // Methods
     registerSectionEditor,

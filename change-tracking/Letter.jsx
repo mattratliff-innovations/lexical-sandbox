@@ -1,5 +1,5 @@
 /* eslint-disable react/prop-types */
-import React, { useContext, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useContext, useEffect, useRef, useState } from 'react';
 
 import { DrButton } from '@druid/druid';
 import { DateTime } from 'luxon';
@@ -567,11 +567,18 @@ export default function Letter() {
   if (invalidStatus) return <InvalidStatus heading="Something Went Wrong" />;
   if (unauthorized) return <Unauthorized />;
 
+  // NEW: Memoize the letter change callback to prevent re-renders
+  const handleLetterChange = useCallback((info) => {
+    setHasUnsavedChanges(info.hasChanges);
+    setChangeInfo(info);
+  }, []);
+
   return (
-    <LetterChangeTracker letter={draft} initialLetter={initialLetterRef.current} onLetterChange={(info) => {
-      setHasUnsavedChanges(info.hasChanges);
-      setChangeInfo(info);
-    }}>
+    <LetterChangeTracker 
+      letter={draft} 
+      initialLetter={initialLetterRef.current} 
+      onLetterChange={handleLetterChange}
+    >
       {({ hasChanges, hasStructureChanges, hasEditorChanges, dirtySections, registerSectionEditor, unregisterSectionEditor, handleSectionEditorDirty, markAllClean, checkForChanges }) => {
         // Store callbacks in refs so they're accessible everywhere
         markAllCleanRef.current = markAllClean;
