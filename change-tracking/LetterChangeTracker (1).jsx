@@ -6,10 +6,13 @@ import { useEditorDirtyTracking } from './useEditorDirtyTracking.js';
 
 /**
  * LetterChangeTracker
- * Used to track the different types of changes in the letter
+ * Used to track structural changes in the letter
  * 1. Section content changes - Lexical editor modifications within section editors (excluding startsWith/endsWith)
  * 2. Add/Remove sections - Changes to the sectionAttributes length
  * 3. Reordering sections - Change to section ID sequence based on order
+ * 
+ * Note: This tracker does NOT continuously check for changes. Instead, it provides a 
+ * checkForChanges() function that should be called on-demand (e.g., before navigation).
  */
 
 /**
@@ -18,17 +21,12 @@ import { useEditorDirtyTracking } from './useEditorDirtyTracking.js';
  *
  * @param {Object} currentLetter - Current letter data
  * @param {Object} initialLetter - Initial/saved letter data
- * @returns {Object} - { hasStructureChanges, structureChangeType, resetStructure }
+ * @returns {Object} - { checkStructureChanges, resetStructure }
  */
 export function useLetterStructureTracking(currentLetter, initialLetter) {
-  const [hasStructureChanges, setHasStructureChanges] = useState(false);
-  const [structureChangeType, setStructureChangeType] = useState(null);
-
-  useEffect(() => {
+  const checkStructureChanges = useCallback(() => {
     if (!initialLetter || !currentLetter) {
-      setHasStructureChanges(false);
-      setStructureChangeType(null);
-      return;
+      return { hasChanges: false, changeType: null };
     }
 
     // 1. Check if sections were added/removed
@@ -39,30 +37,19 @@ export function useLetterStructureTracking(currentLetter, initialLetter) {
 
     const hasChanges = sectionsCountChanged || sectionsReordered;
 
-    setHasStructureChanges(hasChanges);
-
-    // Determine the type of change for detailed tracking
+    let changeType = null;
     if (hasChanges) {
       if (sectionsCountChanged) {
-        setStructureChangeType('sections_count');
+        changeType = 'sections_count';
       } else if (sectionsReordered) {
-        setStructureChangeType('sections_reorder');
+        changeType = 'sections_reorder';
       }
-    } else {
-      setStructureChangeType(null);
     }
+
+    return { hasChanges, changeType };
   }, [currentLetter, initialLetter]);
 
-  const resetStructure = useCallback(() => {
-    setHasStructureChanges(false);
-    setStructureChangeType(null);
-  }, []);
-
-  return {
-    hasStructureChanges,
-    structureChangeType,
-    resetStructure,
-  };
+  return { checkStructureChanges };
 }
 
 /**
@@ -89,19 +76,18 @@ function arraysEqual(a, b) {
 }
 
 /**
- * Main component that coordinates all letter change tracking
- * Combines structure tracking + section editor content tracking
+ * Main component that coordinates letter change tracking
+ * Tracks structural changes (add/remove/reorder sections) and editor content changes
+ * 
+ * Does NOT continuously check - provides checkForChanges() function instead
  */
-export function LetterChangeTracker({ letter, initialLetter, onLetterChange, children }) {
-  // Track structure changes (add/remove/reorder sections)
-  const { hasStructureChanges, structureChangeType, resetStructure } = useLetterStructureTracking(letter, initialLetter);
+export function LetterChangeTracker({ letter, initialLetter, children }) {
+  // Track structure changes
+  const { checkStructureChanges } = useLetterStructureTracking(letter, initialLetter);
 
   // Track section editor content changes
   const [dirtySectionEditors, setDirtySectionEditors] = useState(new Set());
   const [sectionEditorTracking, setSectionEditorTracking] = useState({});
-
-  const hasEditorChanges = dirtySectionEditors.size > 0;
-  const hasAnyChanges = hasStructureChanges || hasEditorChanges;
 
   // Callback when individual section editor becomes dirty
   const handleSectionEditorDirty = useCallback((sectionId, isDirty) => {
@@ -140,52 +126,46 @@ export function LetterChangeTracker({ letter, initialLetter, onLetterChange, chi
 
   // Mark all editors as clean (after save)
   const markAllClean = useCallback(() => {
-    // Reset structure tracking
-    resetStructure();
-
     // Reset all section editors
     Object.values(sectionEditorTracking).forEach(({ tracking }) => {
       tracking?.markClean();
     });
 
     setDirtySectionEditors(new Set());
-  }, [resetStructure, sectionEditorTracking]);
+  }, [sectionEditorTracking]);
 
-  // Notify parent of changes
-  useEffect(() => {
-    if (onLetterChange) {
-      onLetterChange({
-        hasChanges: hasAnyChanges,
-        hasStructureChanges,
-        hasEditorChanges,
-        structureChangeType,
-        dirtySections: Array.from(dirtySectionEditors),
-        changeDetails: {
-          sectionsCount: structureChangeType === 'sections_count',
-          sectionsReorder: structureChangeType === 'sections_reorder',
-          sectionContent: hasEditorChanges,
-        },
-      });
-    }
-  }, [hasAnyChanges, hasStructureChanges, hasEditorChanges, structureChangeType, dirtySectionEditors, onLetterChange]);
+  // Manual check for changes - call this before navigation
+  const checkForChanges = useCallback(() => {
+    const { hasChanges: hasStructureChanges, changeType: structureChangeType } = checkStructureChanges();
+    const hasEditorChanges = dirtySectionEditors.size > 0;
+    const hasAnyChanges = hasStructureChanges || hasEditorChanges;
+
+    return {
+      hasChanges: hasAnyChanges,
+      hasStructureChanges,
+      hasEditorChanges,
+      structureChangeType,
+      dirtySections: Array.from(dirtySectionEditors),
+      changeDetails: {
+        sectionsCount: structureChangeType === 'sections_count',
+        sectionsReorder: structureChangeType === 'sections_reorder',
+        sectionContent: hasEditorChanges,
+      },
+    };
+  }, [checkStructureChanges, dirtySectionEditors]);
 
   // Provide context to children
   return children({
-    // State
-    hasChanges: hasAnyChanges,
-    hasStructureChanges,
-    hasEditorChanges,
-    structureChangeType,
-    dirtySections: Array.from(dirtySectionEditors),
-
     // Methods
+    checkForChanges,
     registerSectionEditor,
     unregisterSectionEditor,
     handleSectionEditorDirty,
     markAllClean,
 
-    // Tracking objects
+    // Tracking objects (for debugging)
     sectionEditorTracking,
+    dirtySectionEditors,
   });
 }
 
