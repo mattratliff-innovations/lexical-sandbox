@@ -552,6 +552,8 @@ export default function Letter() {
     >
       {({
         checkForChanges,
+        hasDirtyEditors,
+        dirtyEditorsCount,
         registerSectionEditor,
         unregisterSectionEditor,
         handleSectionEditorDirty,
@@ -559,16 +561,6 @@ export default function Letter() {
       }) => {
         // Store checkForChanges in ref for navigation blocking
         checkForChangesRef.current = checkForChanges;
-
-        // Call checkForChanges to get current state for rendering
-        const changeState = checkForChanges();
-        const {
-          hasChanges,
-          hasStructureChanges,
-          hasEditorChanges,
-          structureChangeType,
-          dirtySections,
-        } = changeState;
 
         return (
           <>
@@ -638,7 +630,7 @@ export default function Letter() {
                             : 'No unsaved changes detected.'
                         );
                       },
-                      hasChanges,
+                      hasChanges: hasDirtyEditors, // Simple boolean, doesn't trigger structure check
                     },
                   },
                   {

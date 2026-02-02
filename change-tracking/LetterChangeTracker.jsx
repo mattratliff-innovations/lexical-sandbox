@@ -156,14 +156,18 @@ export function LetterChangeTracker({ letter, initialLetter, children }) {
 
   // Provide context to children
   return children({
+    // State for button display (doesn't trigger structure check)
+    hasDirtyEditors: dirtySectionEditors.size > 0,
+    dirtyEditorsCount: dirtySectionEditors.size,
+    
     // Methods
-    checkForChanges,
+    checkForChanges, // Call this on-demand only
     registerSectionEditor,
     unregisterSectionEditor,
     handleSectionEditorDirty,
     markAllClean,
 
-    // Tracking objects (for debugging)
+    // Debug info
     sectionEditorTracking,
     dirtySectionEditors,
   });
@@ -175,6 +179,8 @@ export function LetterChangeTracker({ letter, initialLetter, children }) {
  * DO NOT use this for startsWith or endsWith editors - only for section editors
  */
 export function TrackedSectionEditor({ section, editor, onEditorDirty, registerEditor, unregisterEditor, children }) {
+  const [isRegistered, setIsRegistered] = useState(false);
+
   // Setup dirty tracking for this editor
   const tracking = useEditorDirtyTracking(editor, section.id, onEditorDirty, {
     ignoreInitialLoad: true,
@@ -182,17 +188,23 @@ export function TrackedSectionEditor({ section, editor, onEditorDirty, registerE
   });
 
   // Register this editor with parent tracker
+  // Only run once when editor becomes available
   useEffect(() => {
-    if (editor && registerEditor) {
+    if (editor && registerEditor && !isRegistered) {
       registerEditor(section.id, editor, tracking);
+      setIsRegistered(true);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [section.id, !!editor]); // Only depend on section.id and whether editor exists
 
+  // Cleanup on unmount
+  useEffect(() => {
     return () => {
-      if (unregisterEditor) {
+      if (unregisterEditor && isRegistered) {
         unregisterEditor(section.id);
       }
     };
-  }, [section.id, editor, tracking, registerEditor, unregisterEditor]);
+  }, [section.id, unregisterEditor, isRegistered]);
 
   return children({ tracking });
 }
