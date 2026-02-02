@@ -21,7 +21,7 @@ import { useEditorDirtyTracking } from './useEditorDirtyTracking.js';
  *
  * @param {Object} currentLetter - Current letter data
  * @param {Object} initialLetter - Initial/saved letter data
- * @returns {Object} - { checkStructureChanges, resetStructure }
+ * @returns {Object} - { checkStructureChanges }
  */
 export function useLetterStructureTracking(currentLetter, initialLetter) {
   const checkStructureChanges = useCallback(() => {
@@ -29,11 +29,17 @@ export function useLetterStructureTracking(currentLetter, initialLetter) {
       return { hasChanges: false, changeType: null };
     }
 
+    // Filter out sections marked for destruction (_destroy)
+    const currentActiveSections = (currentLetter.sectionsAttributes || currentLetter.sections || [])
+      .filter(s => s._destroy === undefined || s._destroy === false || s._destroy === 0);
+    const initialActiveSections = (initialLetter.sectionsAttributes || initialLetter.sections || [])
+      .filter(s => s._destroy === undefined || s._destroy === false || s._destroy === 0);
+
     // 1. Check if sections were added/removed
-    const sectionsCountChanged = currentLetter.sectionsAttributes?.length !== initialLetter.sectionsAttributes?.length;
+    const sectionsCountChanged = currentActiveSections.length !== initialActiveSections.length;
 
     // 2. Check if sections were reordered
-    const sectionsReordered = checkSectionsReordered(currentLetter.sectionsAttributes, initialLetter.sectionsAttributes);
+    const sectionsReordered = checkSectionsReordered(currentActiveSections, initialActiveSections);
 
     const hasChanges = sectionsCountChanged || sectionsReordered;
 

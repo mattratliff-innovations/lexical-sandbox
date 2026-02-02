@@ -286,7 +286,7 @@ const ScribeDocument = forwardRef(
 
       setDraftState((currentDraftState) => ({
         ...currentDraftState,
-        sections: [...draftState.sections, newSection],
+        sections: [...currentDraftState.sections, newSection], // ✅ Use currentDraftState, not stale draftState
       }));
     };
 
