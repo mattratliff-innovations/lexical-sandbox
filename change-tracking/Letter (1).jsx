@@ -117,6 +117,20 @@ function DeleteButton({ onClick }) {
   );
 }
 
+function CheckChangesButton({ onClick, hasChanges }) {
+  return (
+    <ActionButton
+      data-testid="checkChanges"
+      id="checkChanges"
+      title="Check for Changes"
+      aria-label="Check for Changes"
+      onClick={onClick}
+      icon={ClockHistory}
+      text={hasChanges ? 'Has Unsaved Changes ⚠️' : 'No Changes ✓'}
+    />
+  );
+}
+
 function LocalPrintButton({ onClick }) {
   return (
     <DrButton styles={reviewButtonStyles} data-testid="localPrintButton" aria-label="Local Print" onClick={onClick}>
@@ -582,6 +596,27 @@ export default function Letter() {
               ...scribeEditorConfig,
               quickActions: [
                 { component: SaveButton, props: { onClick: () => saveDraft(markAllClean) } },
+                {
+                  component: CheckChangesButton,
+                  props: {
+                    onClick: () => {
+                      const details = [];
+                      if (hasStructureChanges) {
+                        details.push(`Structure: ${structureChangeType}`);
+                      }
+                      if (hasEditorChanges) {
+                        details.push(`Content: ${dirtySections.length} section(s) modified`);
+                      }
+                      
+                      alert(
+                        hasChanges
+                          ? `Letter has unsaved changes!\n\n${details.join('\n')}`
+                          : 'No unsaved changes detected.'
+                      );
+                    },
+                    hasChanges,
+                  },
+                },
                 {
                   component: ChangeHeaderButton,
                   props: { onClick: () => showModal('changeHeader') },
