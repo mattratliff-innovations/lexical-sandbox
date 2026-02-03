@@ -62,15 +62,16 @@ export function useLetterStructureTracking(getCurrentLetter, initialLetter) {
 
 /**
  * Check if sections have been reordered by comparing ID sequence
+ * Compares array position, not the 'order' field (which may not be updated during reordering)
  */
 function checkSectionsReordered(currentSections, initialSections) {
   if (!currentSections || !initialSections) return false;
   if (currentSections.length !== initialSections.length) return false;
 
-  // Sort by order and compare ID sequence
-  const currentIds = [...currentSections].sort((a, b) => a.order - b.order).map((s) => s.id);
-
-  const initialIds = [...initialSections].sort((a, b) => a.order - b.order).map((s) => s.id);
+  // Compare ID sequence in array order (don't sort by 'order' field)
+  // The array position IS the order after reordering via swapSections
+  const currentIds = currentSections.map((s) => s.id || s.frontEndId);
+  const initialIds = initialSections.map((s) => s.id || s.frontEndId);
 
   return !arraysEqual(currentIds, initialIds);
 }
