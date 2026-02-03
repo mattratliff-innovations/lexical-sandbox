@@ -547,7 +547,7 @@ export default function Letter() {
 
   return (
     <LetterChangeTracker
-      letter={letterEditorRef.current?.draftState || draft}
+      letterEditorRef={letterEditorRef}
       initialLetter={initialDraft}
     >
       {({

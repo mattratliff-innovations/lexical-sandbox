@@ -45,6 +45,7 @@ const ScribeDocument = forwardRef(
   ) => {
     const editorsRef = useRef({});
     const portraitUsLetterRef = useRef(null);
+    const draftStateRef = useRef(draft); // Ref to track current draftState
     const [draftState, setDraftState] = useState(draft);
     const [frontEndIdToDelete, setFrontEndIdToDelete] = useState(null);
     const [showSectionDeleteModal, setShowSectionDeleteModal] = useState(false);
@@ -53,6 +54,11 @@ const ScribeDocument = forwardRef(
 
     // fullscreen constants
     const [isFullscreen, setIsFullscreen] = useState(false);
+
+    // Update draftStateRef whenever draftState changes
+    useEffect(() => {
+      draftStateRef.current = draftState;
+    }, [draftState]);
 
     // Toggle fullscreen mode
     const toggleFullscreen = useCallback(() => {
@@ -237,7 +243,10 @@ const ScribeDocument = forwardRef(
       letterDraftData,
       estimatePrintPages,
       portraitUsLetterRef,
-      draftState, // Expose draftState for LetterChangeTracker
+      get draftState() {
+        // Always return current draftState from ref
+        return draftStateRef.current;
+      },
     }));
 
     const nonDestroyedSections = (currentDraft) => currentDraft?.sections?.filter((sec) => sec._destroy === undefined);

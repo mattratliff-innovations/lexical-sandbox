@@ -19,12 +19,14 @@ import { useEditorDirtyTracking } from './useEditorDirtyTracking.js';
  * Hook to track changes to letter structure
  * Handles: add/remove sections, reorder sections
  *
- * @param {Object} currentLetter - Current letter data
+ * @param {Function} getCurrentLetter - Function that returns current letter data
  * @param {Object} initialLetter - Initial/saved letter data
  * @returns {Object} - { checkStructureChanges }
  */
-export function useLetterStructureTracking(currentLetter, initialLetter) {
+export function useLetterStructureTracking(getCurrentLetter, initialLetter) {
   const checkStructureChanges = useCallback(() => {
+    const currentLetter = getCurrentLetter();
+    
     if (!initialLetter || !currentLetter) {
       return { hasChanges: false, changeType: null };
     }
@@ -53,7 +55,7 @@ export function useLetterStructureTracking(currentLetter, initialLetter) {
     }
 
     return { hasChanges, changeType };
-  }, [currentLetter, initialLetter]);
+  }, [getCurrentLetter, initialLetter]);
 
   return { checkStructureChanges };
 }
@@ -87,9 +89,14 @@ function arraysEqual(a, b) {
  * 
  * Does NOT continuously check - provides checkForChanges() function instead
  */
-export function LetterChangeTracker({ letter, initialLetter, children }) {
+export function LetterChangeTracker({ letterEditorRef, initialLetter, children }) {
+  // Get current letter from ref (always up-to-date)
+  const getCurrentLetter = useCallback(() => {
+    return letterEditorRef.current?.draftState || null;
+  }, [letterEditorRef]);
+
   // Track structure changes
-  const { checkStructureChanges } = useLetterStructureTracking(letter, initialLetter);
+  const { checkStructureChanges } = useLetterStructureTracking(getCurrentLetter, initialLetter);
 
   // Track section editor content changes
   const [dirtySectionEditors, setDirtySectionEditors] = useState(new Set());
