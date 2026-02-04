@@ -46,7 +46,17 @@ const ScribeDocument = forwardRef(
     const editorsRef = useRef({});
     const portraitUsLetterRef = useRef(null);
     const draftStateRef = useRef(draft); // Ref to track current draftState
-    const [draftState, setDraftState] = useState(draft);
+    const [draftState, setDraftStateInternal] = useState(draft);
+    
+    // Wrapper that updates ref synchronously
+    const setDraftState = useCallback((updater) => {
+      setDraftStateInternal((prevState) => {
+        const nextState = typeof updater === 'function' ? updater(prevState) : updater;
+        draftStateRef.current = nextState; // Update ref synchronously
+        return nextState;
+      });
+    }, []);
+    
     const [frontEndIdToDelete, setFrontEndIdToDelete] = useState(null);
     const [showSectionDeleteModal, setShowSectionDeleteModal] = useState(false);
     const [organizationSignature, setOrganizationSignature] = useState(null);
@@ -54,11 +64,6 @@ const ScribeDocument = forwardRef(
 
     // fullscreen constants
     const [isFullscreen, setIsFullscreen] = useState(false);
-
-    // Update draftStateRef whenever draftState changes
-    useEffect(() => {
-      draftStateRef.current = draftState;
-    }, [draftState]);
 
     // Toggle fullscreen mode
     const toggleFullscreen = useCallback(() => {
@@ -370,7 +375,9 @@ const ScribeDocument = forwardRef(
         .map((section) => ({ ...section, frontEndId: section.id ?? uuidv4() }))
         .toSorted((a, b) => a.order - b.order);
 
-      setDraftState({ ...draft, ...{ sections: nextSections } });
+      const nextDraftState = { ...draft, ...{ sections: nextSections } };
+      setDraftStateInternal(nextDraftState);
+      draftStateRef.current = nextDraftState; // Update ref when draft changes
       setOrganizationSignature(findOrganizationSignature(draft));
     }, [draft]);
 
