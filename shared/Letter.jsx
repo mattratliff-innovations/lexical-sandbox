@@ -1,5 +1,5 @@
 /* eslint-disable react/prop-types */
-import React, { useContext, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useContext, useEffect, useRef, useState } from 'react';
 
 import { DrButton } from '@druid/druid';
 import { DateTime } from 'luxon';
@@ -14,8 +14,10 @@ import ChangeSignatureModal from './ChangeSignatureModal';
 import DeleteLetterModal from './DeleteLetterModal';
 import renderPdfHtml from './htmlTo508CompliantPdfHtml';
 import './Letter.css';
+import { sortSectionsByOrder } from './LetterUtil';
 import PrintPreviewErrorModal from './PrintPreviewErrorsModal';
 import ReassignLetterButton from './ReassignLetterButton';
+import { LetterChangeTracker } from './scribeEditor/scribeDocument/LetterChangeTracker';
 import hasLetterAccess from './utils/checkLetterAccess';
 import { AppContext } from '../../AppProvider';
 import ScribeEditor from './scribeEditor/ScribeEditor';
@@ -29,8 +31,8 @@ import { APP_API_ENDPOINT, createAuthenticatedAxios, PDF_ENDPOINT } from '../../
 import { deleteLetter } from '../../http/letters';
 import LoadingFallback from '../../utils/LoadingFallback';
 import SignaturePreview from '../admin/organizations/SignaturePreview';
-// NEW: Import LetterChangeTracker
-import { LetterChangeTracker } from './scribeEditor/LetterChangeTracker.jsx';
+import useModalCheck from '../util/customHooks/useModalCheck';
+import UtilityModal from '../util/UtilityModal';
 
 const reviewButtonStyles = {
   button: {
@@ -200,6 +202,7 @@ export default function Letter() {
   const [showPdf, setShowPdf] = useState(false);
   const [pdfData, setPdfData] = useState(null);
   const [draft, setDraft] = useState(null);
+  const [initialDraft, setInitialDraft] = useState(null);
   const [curHtml, setCurHtml] = useState({});
   const [defaultSignature, setDefaultSignature] = useState(null);
   const [inlinePdfScale, setInlinePdfScale] = useState(null);
@@ -210,12 +213,11 @@ export default function Letter() {
   const { currentUser } = useContext(AppContext);
   const [unauthorized, setUnauthorized] = useState(false);
   const [invalidStatus, setInvalidStatus] = useState(false);
-
-  // NEW: Change tracking state
+  const checkForChangesRef = useRef(null);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  const [changeInfo, setChangeInfo] = useState(null);
-  const initialLetterRef = useRef(null);
-  const markAllCleanRef = useRef(null);
+  const lastHasChangesRef = useRef(false);
+
+  const { isBlocked, setIsBlocked, blocker } = useModalCheck(hasUnsavedChanges);
 
   // Reset endnote manager when component unmounts or navigates away
   useEffect(
@@ -227,19 +229,28 @@ export default function Letter() {
     []
   );
 
-  // NEW: Browser warning for unsaved changes
+  // Used for track changes
   useEffect(() => {
-    const handleBeforeUnload = (e) => {
-      if (hasUnsavedChanges) {
-        e.preventDefault();
-        e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
-        return e.returnValue;
-      }
-    };
+    if (!initialDraft) return; // Do not start interval until initialDraft is set
+    const intervalId = setInterval(() => {
+      if (checkForChangesRef.current) {
+        try {
+          const result = checkForChangesRef.current();
+          const { hasChanges } = result;
 
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [hasUnsavedChanges]);
+          // Log details for debugging
+          if (hasChanges !== lastHasChangesRef.current) {
+            lastHasChangesRef.current = hasChanges;
+            setHasUnsavedChanges(hasChanges);
+          }
+        } catch (error) {
+          console.error('Error checking for changes:', error);
+        }
+      }
+    }, 1000);
+    // eslint-disable-next-line consistent-return
+    return () => clearInterval(intervalId);
+  }, [initialDraft]); // Only run when initialDraft is set
 
   const renderToast = (type, message) => {
     toast[type](message, {
@@ -279,50 +290,57 @@ export default function Letter() {
   const openCentralPrintPreview = (printType) => {
     navigate(`/${RESOURCES.drafts}/${uuid}/preview/central-print`, {
       state: {
+        totalPageCount: letterEditorRef.current.estimatePrintPages(),
+        printType,
+      },
+    });
+  };
+
+  const openCompleteWithoutPrintingPreview = (printType) => {
+    navigate(`/${RESOURCES.drafts}/${uuid}/preview/complete-without-printing`, {
+      state: {
+        totalPageCount: letterEditorRef.current.estimatePrintPages(),
         printType,
       },
     });
   };
 
   const openPreviewFor = (printType) => {
-    if (printType === 'local') openLocalPrintPreview(printType);
-    else openCentralPrintPreview(printType);
+    switch (printType) {
+      case 'local':
+        openLocalPrintPreview(printType);
+        break;
+      case 'central':
+        openCentralPrintPreview(printType);
+        break;
+      case 'noprint':
+        openCompleteWithoutPrintingPreview(printType);
+        break;
+      default:
+        break;
+    }
   };
 
-  // UPDATED: saveDraft with change tracking
-  const saveDraft = () => {
-    const draftData = letterEditorRef.current.letterDraftData();
-
+  const saveDraft = async (markAllClean) => {
+    const draftData = {
+      ...letterEditorRef.current.letterDraftData(),
+      organizationSignatureId: defaultSignature?.id,
+    };
     return axios
-      .put(`${APP_API_ENDPOINT}/letters/${draft.id}`, {
-        letter: {
-          ...draftData,
-          organizationSignatureId: defaultSignature?.id,
-        },
-      })
+      .put(`${APP_API_ENDPOINT}/letters/${draft.id}`, { letter: draftData })
       .then((response) => {
-        setDraft((s) => ({
-          ...s,
-          organizationSignatureId: defaultSignature?.id,
-          updatedAt: response.data.updatedAt,
+        setDraft((prev) => ({
+          ...prev,
           sections: response.data.sections,
         }));
-
-        // NEW: Mark changes as clean
-        if (markAllCleanRef.current) {
-          markAllCleanRef.current();
+        // Update initial draft to reflect saved state
+        if (letterEditorRef.current?.draftState) {
+          setInitialDraft(sortSectionsByOrder(letterEditorRef.current.draftState));
         }
-
-        // NEW: Update initial reference
-        initialLetterRef.current = {
-          ...response.data,
-          sectionsAttributes: response.data.sections?.map((s) => ({
-            id: s.id,
-            text: s.text,
-            order: s.order,
-          })),
-        };
-
+        // Mark all changes as clean in the tracker
+        if (markAllClean) {
+          markAllClean();
+        }
         renderToast('success', 'Letter successfully saved');
         return response.data;
       })
@@ -440,19 +458,7 @@ export default function Letter() {
         if (window.endnoteManager) window.endnoteManager.initializeFromLetter(letter);
 
         setDraft(letter);
-
-        // NEW: Store initial letter for comparison
-        if (!initialLetterRef.current) {
-          initialLetterRef.current = {
-            ...letter,
-            sectionsAttributes: letter.sections?.map((s) => ({
-              id: s.id,
-              text: s.text,
-              order: s.order,
-            })),
-          };
-        }
-
+        setInitialDraft(sortSectionsByOrder(letter)); // Save initial state for change tracking
         setDraftOrganization(letter.organizationId);
         if (letter.letterType.signatureIncluded && letter.organizationSignature) {
           setDefaultSignature(letter.organizationSignature);
@@ -535,25 +541,21 @@ export default function Letter() {
   if (unauthorized) return <Unauthorized />;
 
   return (
-    <LetterChangeTracker letter={draft} initialLetter={initialLetterRef.current} onLetterChange={(info) => {
-      setHasUnsavedChanges(info.hasChanges);
-      setChangeInfo(info);
-    }}>
-      {({ hasChanges, hasStructureChanges, hasEditorChanges, dirtySections, registerSectionEditor, unregisterSectionEditor, handleSectionEditorDirty, markAllClean }) => {
-        // Store markAllClean in ref so saveDraft can access it
-        markAllCleanRef.current = markAllClean;
+    <LetterChangeTracker letterEditorRef={letterEditorRef} initialLetter={initialDraft}>
+      {({
+        checkForChanges,
+        hasDirtyEditors,
+        dirtyEditorsCount,
+        registerSectionEditor,
+        unregisterSectionEditor,
+        handleSectionEditorDirty,
+        markAllClean,
+      }) => {
+        // Store checkForChanges in ref for navigation blocking
+        checkForChangesRef.current = checkForChanges;
 
         return (
           <>
-            {/* NEW: Unsaved changes indicator */}
-            {hasChanges && (
-              <div className="unsaved-changes-banner">
-                <span>Unsaved changes detected</span>
-                {hasStructureChanges && <span> (Structure modified)</span>}
-                {hasEditorChanges && <span> ({dirtySections.length} section{dirtySections.length !== 1 ? 's' : ''} edited)</span>}
-              </div>
-            )}
-
             {draft?.letterType?.signatureIncluded && (
               <ChangeSignatureModal
                 showModal={isModalOpen('changeSignature')}
@@ -563,12 +565,23 @@ export default function Letter() {
               />
             )}
 
+            <UtilityModal isOpen={isBlocked} setIsOpen={setIsBlocked} blocker={blocker} />
+
             <ActivityLogModal showModal={isModalOpen('activityLog')} hideModal={() => hideModal('activityLog')} letterId={draft.id} />
-            <DeleteLetterModal showModal={isModalOpen('deleteLetter')} setShowModal={setDeleteLetterModalOpen} confirmDeleteLetter={confirmDeleteLetter} />
+            <DeleteLetterModal
+              showModal={isModalOpen('deleteLetter')}
+              setShowModal={setDeleteLetterModalOpen}
+              confirmDeleteLetter={confirmDeleteLetter}
+            />
 
             {draft && (
               <>
-                <AddEnclosureModal showModal={isModalOpen('addEnclosure')} setShowModal={setAddEnclosureModalOpen} setLetter={setDraft} letter={draft} />
+                <AddEnclosureModal
+                  showModal={isModalOpen('addEnclosure')}
+                  setShowModal={setAddEnclosureModalOpen}
+                  setLetter={setDraft}
+                  letter={draft}
+                />
 
                 <PrintPreviewErrorModal
                   showModal={isModalOpen('printPreviewError')}
@@ -577,7 +590,12 @@ export default function Letter() {
                   draft={draft}
                 />
 
-                <ChangeHeaderModal showModal={isModalOpen('changeHeader')} setShowModal={setChangeHeaderModalOpen} onSubmit={onSubmitChangeHeader} draft={draft} />
+                <ChangeHeaderModal
+                  showModal={isModalOpen('changeHeader')}
+                  setShowModal={setChangeHeaderModalOpen}
+                  onSubmit={onSubmitChangeHeader}
+                  draft={draft}
+                />
               </>
             )}
 
@@ -594,17 +612,45 @@ export default function Letter() {
               SignaturePreview={SignaturePreview}
               scribeEditorConfig={{
                 ...scribeEditorConfig,
-                // NEW: Pass change tracking to ScribeDocument
-                changeTracking: {
-                  registerSectionEditor,
-                  unregisterSectionEditor,
-                  handleSectionEditorDirty,
-                  dirtySections,
-                },
+                quickActions: [
+                  { component: SaveButton, props: { onClick: () => saveDraft(markAllClean) } },
+
+                  {
+                    component: ChangeHeaderButton,
+                    props: { onClick: () => showModal('changeHeader') },
+                    condition: draft?.letterType?.headerIncluded ?? true,
+                  },
+                  {
+                    component: ChangeSignatureButton,
+                    props: { onClick: () => showModal('changeSignature') },
+                    condition: draft?.letterType?.signatureIncluded,
+                  },
+                  {
+                    component: ReassignLetterButton,
+                    props: { draft, setDraft },
+                  },
+                  {
+                    component: AddEnclosureButton,
+                    props: { onClick: () => showModal('addEnclosure') },
+                  },
+                  {
+                    component: ActivityLogButton,
+                    props: { onClick: () => showModal('activityLog') },
+                  },
+                  {
+                    component: DeleteButton,
+                    props: { onClick: () => showModal('deleteLetter') },
+                  },
+                ],
               }}
               handlePdfToggle={handlePdfToggle}
               setHeight={setLetterHeight}
               currentUser={currentUser}
+              letterChangeTracking={{
+                registerSectionEditor,
+                unregisterSectionEditor,
+                handleSectionEditorDirty,
+              }}
             />
             <VawaModal showModal={showVawaModal} setShowModal={setShowVawaModal} confirmBtnText="Acknowledge" negativeBtnText="Go Back" />
           </>
