@@ -1,0 +1,317 @@
+/* Spell Check Modal Styles */
+
+/* Overlay for positioning context */
+.spell-check-popup-overlay {
+  position: static;
+  top: auto;
+  left: auto;
+  width: 100%;
+  height: 100%;
+  z-index: auto;
+}
+
+/* Admin page overlay (for snippet admin modal) */
+.spell-check-popup-overlay--admin {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 2000;
+}
+
+.spell-check-modal {
+  position: absolute;
+  background-color: #6b6b6b;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  padding: 16px;
+  min-width: 280px;
+  max-width: 320px;
+  z-index: 1000;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+  color: white;
+}
+
+/* Arrow pointing to the misspelled word */
+.spell-check-modal::before {
+  content: '';
+  position: absolute;
+  top: -8px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 10px solid transparent;
+  border-right: 10px solid transparent;
+  border-bottom: 10px solid #6b6b6b;
+}
+
+/* Header section with type and word */
+.spell-check-modal__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.spell-check-modal__type {
+  color: white;
+  font-weight: 600;
+}
+
+.spell-check-modal__separator {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.spell-check-modal__word {
+  color: white;
+  font-weight: 400;
+}
+
+/* Main content area */
+.spell-check-modal__content {
+  margin-bottom: 12px;
+}
+
+/* Suggestions list */
+.spell-check-modal__suggestions {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  max-height: 150px;
+  overflow-y: auto;
+}
+
+.spell-check-modal__suggestion-item {
+  padding: 8px 12px;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background-color 0.15s ease;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+.spell-check-modal__suggestion-item:hover {
+  background-color: rgba(255, 255, 255, 0.15);
+}
+
+.spell-check-modal__suggestion-item:active {
+  background-color: rgba(255, 255, 255, 0.25);
+}
+
+.spell-check-modal__suggestion-item:last-child {
+  margin-bottom: 0;
+}
+
+/* Scrollbar styling for suggestions */
+.spell-check-modal__suggestions::-webkit-scrollbar {
+  width: 6px;
+}
+
+.spell-check-modal__suggestions::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+}
+
+.spell-check-modal__suggestions::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 3px;
+}
+
+.spell-check-modal__suggestions::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.4);
+}
+
+/* Current suggestion display */
+.spell-check-modal__current-suggestion {
+  padding: 8px 12px;
+  font-size: 14px;
+  background-color: rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  margin-bottom: 12px;
+}
+
+/* Controls section */
+.spell-check-modal__controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+/* Navigation buttons (left/right arrows) */
+.spell-check-modal__navigation {
+  display: flex;
+  gap: 8px;
+}
+
+.spell-check-modal__nav-button {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background-color: transparent;
+  cursor: pointer;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.15s ease;
+  padding: 0;
+}
+
+.spell-check-modal__nav-button:hover {
+  background-color: rgba(255, 255, 255, 0.15);
+}
+
+.spell-check-modal__nav-button:active {
+  background-color: rgba(255, 255, 255, 0.25);
+}
+
+.spell-check-modal__nav-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.spell-check-modal__nav-button:disabled:hover {
+  background-color: transparent;
+}
+
+/* Arrow icons */
+.spell-check-modal__nav-button svg {
+  width: 20px;
+  height: 20px;
+  fill: white;
+}
+
+/* Action buttons (ignore, add to dictionary) */
+.spell-check-modal__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.spell-check-modal__action-button {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background-color: transparent;
+  cursor: pointer;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.15s ease;
+  padding: 0;
+}
+
+.spell-check-modal__action-button:hover {
+  background-color: rgba(255, 255, 255, 0.15);
+}
+
+.spell-check-modal__action-button:active {
+  background-color: rgba(255, 255, 255, 0.25);
+}
+
+.spell-check-modal__action-button svg {
+  width: 20px;
+  height: 20px;
+  fill: white;
+}
+
+/* Icon styles for ignore button (circle with slash) */
+.spell-check-modal__ignore-icon {
+  width: 22px;
+  height: 22px;
+}
+
+/* Icon styles for add to dictionary button */
+.spell-check-modal__add-icon {
+  width: 20px;
+  height: 20px;
+}
+
+/* Positioning variants */
+.spell-check-modal--above {
+  /* Arrow points down when modal is above the word */
+}
+
+.spell-check-modal--above::before {
+  top: auto;
+  bottom: -8px;
+  border-bottom: none;
+  border-top: 10px solid #6b6b6b;
+}
+
+.spell-check-modal--left {
+  /* Adjust arrow position when modal is to the left */
+}
+
+.spell-check-modal--left::before {
+  left: 20%;
+}
+
+.spell-check-modal--right {
+  /* Adjust arrow position when modal is to the right */
+}
+
+.spell-check-modal--right::before {
+  left: 80%;
+}
+
+/* State for when there are no suggestions (Grammar mode) */
+.spell-check-modal--no-suggestions .spell-check-modal__suggestions {
+  display: none;
+}
+
+/* State for when showing suggestions list (Dictionary lookup) */
+.spell-check-modal--with-list .spell-check-modal__current-suggestion {
+  display: none;
+}
+
+/* No suggestions message */
+.spell-check-modal__no-suggestions {
+  padding: 8px 12px;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 14px;
+  font-style: italic;
+  margin-bottom: 12px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 480px) {
+  .spell-check-modal {
+    max-width: 280px;
+    min-width: 240px;
+  }
+}
+
+/* Animation for modal appearance */
+@keyframes spell-check-modal-appear {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.spell-check-modal {
+  animation: spell-check-modal-appear 0.2s ease-out;
+}
+
+/* Focus styles for accessibility */
+.spell-check-modal__nav-button:focus,
+.spell-check-modal__action-button:focus {
+  outline: 2px solid rgba(255, 255, 255, 0.5);
+  outline-offset: 2px;
+}
+
+.spell-check-modal__suggestion-item:focus {
+  outline: 2px solid rgba(255, 255, 255, 0.5);
+  outline-offset: -2px;
+  background-color: rgba(255, 255, 255, 0.15);
+}
