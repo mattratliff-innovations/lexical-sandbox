@@ -301,7 +301,7 @@ const ScribeDocument = forwardRef(
 
       setDraftState((currentDraftState) => ({
         ...currentDraftState,
-        sections: [...currentDraftState.sections, newSection], // ✅ Use currentDraftState, not stale draftState
+        sections: [...currentDraftState.sections, newSection], // âœ… Use currentDraftState, not stale draftState
       }));
     };
 
@@ -354,11 +354,31 @@ const ScribeDocument = forwardRef(
         />
       );
 
-      // Wrap section editors (not startsWith/endsWith) with tracking
+      // Wrap section editors with tracking
       if (isSection && letterChangeTracking && section.id) {
         return (
           <TrackedSectionEditor
             section={section}
+            editor={editorsRef.current[frontEndId]}
+            onEditorDirty={letterChangeTracking.handleSectionEditorDirty}
+            registerEditor={letterChangeTracking.registerSectionEditor}
+            unregisterEditor={letterChangeTracking.unregisterSectionEditor}>
+            {() => <div>{editor}</div>}
+          </TrackedSectionEditor>
+        );
+      }
+
+      // Wrap starts-with and ends-with editors with tracking
+      if (letterChangeTracking && (frontEndId === 'starts-with-editor' || frontEndId === 'ends-with-editor')) {
+        // Create a pseudo-section object for tracking
+        const pseudoSection = {
+          id: frontEndId,
+          frontEndId,
+        };
+        
+        return (
+          <TrackedSectionEditor
+            section={pseudoSection}
             editor={editorsRef.current[frontEndId]}
             onEditorDirty={letterChangeTracking.handleSectionEditorDirty}
             registerEditor={letterChangeTracking.registerSectionEditor}

@@ -1,84 +1,138 @@
-/* eslint-disable no-underscore-dangle */
 /* eslint-disable import-x/extensions */
-
+/* eslint-disable no-use-before-define */
 import { useCallback, useEffect, useState } from 'react';
 
-import checkSectionsReordered from './LetterChangeTrackerHelperFunctions.js';
 import { useEditorDirtyTracking } from './useEditorDirtyTracking.js';
 /**
  * LetterChangeTracker
- * Used to track structural changes in the letter
- * 1. Section content changes - Lexical editor modifications within section editors (excluding startsWith/endsWith)
+ * Used to track the different types of changes in the letter
+ * 1. Outer letter changes - Any field except the letter contents stored in sectionAttributes
  * 2. Add/Remove sections - Changes to the sectionAttributes length
  * 3. Reordering sections - Change to section ID sequence based on order
- *
- * Note: This tracker does NOT continuously check for changes. Instead, it provides a
- * checkForChanges() function that should be called on-demand (e.g., before navigation).
+ * 4. Editor content changes - Lexical editor modifications within:
+ *    - sectionAttributes (regular sections)
+ *    - startsWith editor
+ *    - endsWith editor
  */
 
 /**
- * Hook to track changes to letter structure
- * Handles: add/remove sections, reorder sections
+ * Hook to track changes to letter structure (everything except section text content)
+ * Handles: outer fields, add/remove sections, reorder sections
  *
- * @param {Function} getCurrentLetter - Function that returns current letter data
+ * @param {Object} currentLetter - Current letter data
  * @param {Object} initialLetter - Initial/saved letter data
- * @returns {Object} - { checkStructureChanges }
+ * @returns {Object} - { hasStructureChanges, structureChangeType, resetStructure }
  */
-export function useLetterStructureTracking(getCurrentLetter, initialLetter) {
-  const checkStructureChanges = useCallback(() => {
-    const currentLetter = getCurrentLetter();
+export function useLetterStructureTracking(currentLetter, initialLetter) {
+  const [hasStructureChanges, setHasStructureChanges] = useState(false);
+  const [structureChangeType, setStructureChangeType] = useState(null);
 
+  useEffect(() => {
     if (!initialLetter || !currentLetter) {
-      return { hasChanges: false, changeType: null };
+      setHasStructureChanges(false);
+      setStructureChangeType(null);
+      return;
     }
 
-    // Filter out sections marked for destruction (_destroy)
-    const currentActiveSections = (currentLetter.sectionsAttributes || currentLetter.sections || []).filter(
-      (s) => s._destroy === undefined || s._destroy === false || s._destroy === 0
-    );
-    const initialActiveSections = (initialLetter.sectionsAttributes || initialLetter.sections || []).filter(
-      (s) => s._destroy === undefined || s._destroy === false || s._destroy === 0
-    );
+    // 1. Check outer letter changes (excluding sectionsAttributes and text content)
+    const outerFieldsChanged = checkOuterFieldsChanged(currentLetter, initialLetter);
 
-    // 1. Check if sections were added/removed
-    const sectionsCountChanged = currentActiveSections.length !== initialActiveSections.length;
+    // 2. Check if sections were added/removed
+    const sectionsCountChanged = currentLetter.sectionsAttributes?.length !== initialLetter.sectionsAttributes?.length;
 
-    // 2. Check if sections were reordered
-    const sectionsReordered = checkSectionsReordered(currentActiveSections, initialActiveSections);
+    // 3. Check if sections were reordered
+    const sectionsReordered = checkSectionsReordered(currentLetter.sectionsAttributes, initialLetter.sectionsAttributes);
 
-    const hasChanges = sectionsCountChanged || sectionsReordered;
+    const hasChanges = outerFieldsChanged || sectionsCountChanged || sectionsReordered;
 
-    let changeType = null;
+    setHasStructureChanges(hasChanges);
+
+    // Determine the type of change for detailed tracking
     if (hasChanges) {
       if (sectionsCountChanged) {
-        changeType = 'sections_count';
+        setStructureChangeType('sections_count');
       } else if (sectionsReordered) {
-        changeType = 'sections_reorder';
+        setStructureChangeType('sections_reorder');
+      } else if (outerFieldsChanged) {
+        setStructureChangeType('outer_fields');
       }
+    } else {
+      setStructureChangeType(null);
     }
+  }, [currentLetter, initialLetter]);
 
-    return { hasChanges, changeType };
-  }, [getCurrentLetter, initialLetter]);
+  const resetStructure = useCallback(() => {
+    setHasStructureChanges(false);
+    setStructureChangeType(null);
+  }, []);
 
-  return { checkStructureChanges };
+  return {
+    hasStructureChanges,
+    structureChangeType,
+    resetStructure,
+  };
 }
 
 /**
- * Main component that coordinates letter change tracking
- * Tracks structural changes (add/remove/reorder sections) and editor content changes
- *
- * Does NOT continuously check - provides checkForChanges() function instead
+ * Check if outer fields (non-sectionsAttributes) have changed
  */
-export function LetterChangeTracker({ letterEditorRef, initialLetter, children }) {
-  // Get current letter from ref (always up-to-date)
-  const getCurrentLetter = useCallback(() => letterEditorRef.current?.draftState || null, [letterEditorRef]);
+function checkOuterFieldsChanged(current, initial) {
+  const outerFields = ['row1Col1', 'row1Col2', 'row2Col1', 'row2Col2', 'row3Col1', 'row3Col2', 'startsWith', 'endsWith', 'endNotes'];
 
-  // Track structure changes
-  const { checkStructureChanges } = useLetterStructureTracking(getCurrentLetter, initialLetter);
+  return outerFields.some((field) => {
+    const currentValue = normalizeHTML(current[field]);
+    const initialValue = normalizeHTML(initial[field]);
+    return currentValue !== initialValue;
+  });
+}
 
-  // Track section editor content changes
+/**
+ * Check if sections have been reordered by comparing ID sequence
+ */
+function checkSectionsReordered(currentSections, initialSections) {
+  if (!currentSections || !initialSections) return false;
+  if (currentSections.length !== initialSections.length) return false;
+
+  // Sort by order and compare ID sequence
+  const currentIds = [...currentSections].sort((a, b) => a.order - b.order).map((s) => s.id);
+
+  const initialIds = [...initialSections].sort((a, b) => a.order - b.order).map((s) => s.id);
+
+  return !arraysEqual(currentIds, initialIds);
+}
+
+/**
+ * Normalize HTML for comparison (remove whitespace variations)
+ */
+function normalizeHTML(html) {
+  if (!html) return '';
+  if (Array.isArray(html)) return JSON.stringify(html);
+  if (typeof html === 'object') return JSON.stringify(html);
+  return html.replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * Compare two arrays for equality
+ */
+function arraysEqual(a, b) {
+  if (a.length !== b.length) return false;
+  return a.every((val, idx) => val === b[idx]);
+}
+
+/**
+ * Main component that coordinates all letter change tracking
+ * Combines structure tracking + section editor tracking
+ */
+export function LetterChangeTracker({ letter, initialLetter, onLetterChange, children }) {
+  // Track structure changes (requirements 1-3)
+  const { hasStructureChanges, structureChangeType, resetStructure } = useLetterStructureTracking(letter, initialLetter);
+
+  // Track section editor changes (requirement 4)
   const [dirtySectionEditors, setDirtySectionEditors] = useState(new Set());
   const [sectionEditorTracking, setSectionEditorTracking] = useState({});
+
+  const hasEditorChanges = dirtySectionEditors.size > 0;
+  const hasAnyChanges = hasStructureChanges || hasEditorChanges;
 
   // Callback when individual section editor becomes dirty
   const handleSectionEditorDirty = useCallback((sectionId, isDirty) => {
@@ -117,61 +171,61 @@ export function LetterChangeTracker({ letterEditorRef, initialLetter, children }
 
   // Mark all editors as clean (after save)
   const markAllClean = useCallback(() => {
+    // Reset structure tracking
+    resetStructure();
+
     // Reset all section editors
     Object.values(sectionEditorTracking).forEach(({ tracking }) => {
       tracking?.markClean();
     });
 
     setDirtySectionEditors(new Set());
-  }, [sectionEditorTracking]);
+  }, [resetStructure, sectionEditorTracking]);
 
-  // Manual check for changes - call this before navigation
-  const checkForChanges = useCallback(() => {
-    const { hasChanges: hasStructureChanges, changeType: structureChangeType } = checkStructureChanges();
-    const hasEditorChanges = dirtySectionEditors.size > 0;
-    const hasAnyChanges = hasStructureChanges || hasEditorChanges;
-
-    return {
-      hasChanges: hasAnyChanges,
-      hasStructureChanges,
-      hasEditorChanges,
-      structureChangeType,
-      dirtySections: Array.from(dirtySectionEditors),
-      changeDetails: {
-        sectionsCount: structureChangeType === 'sections_count',
-        sectionsReorder: structureChangeType === 'sections_reorder',
-        sectionContent: hasEditorChanges,
-      },
-    };
-  }, [checkStructureChanges, dirtySectionEditors]);
+  // Notify parent of changes
+  useEffect(() => {
+    if (onLetterChange) {
+      onLetterChange({
+        hasChanges: hasAnyChanges,
+        hasStructureChanges,
+        hasEditorChanges,
+        structureChangeType,
+        dirtySections: Array.from(dirtySectionEditors),
+        changeDetails: {
+          outerFields: structureChangeType === 'outer_fields',
+          sectionsCount: structureChangeType === 'sections_count',
+          sectionsReorder: structureChangeType === 'sections_reorder',
+          sectionContent: hasEditorChanges,
+        },
+      });
+    }
+  }, [hasAnyChanges, hasStructureChanges, hasEditorChanges, structureChangeType, dirtySectionEditors, onLetterChange]);
 
   // Provide context to children
   return children({
-    // State for button display (doesn't trigger structure check)
-    hasDirtyEditors: dirtySectionEditors.size > 0,
-    dirtyEditorsCount: dirtySectionEditors.size,
+    // State
+    hasChanges: hasAnyChanges,
+    hasStructureChanges,
+    hasEditorChanges,
+    structureChangeType,
+    dirtySections: Array.from(dirtySectionEditors),
 
     // Methods
-    checkForChanges, // Call this on-demand only
     registerSectionEditor,
     unregisterSectionEditor,
     handleSectionEditorDirty,
     markAllClean,
 
-    // Debug info
+    // Tracking objects
     sectionEditorTracking,
-    dirtySectionEditors,
   });
 }
 
 /**
  * Component wrapper for individual section editors
  * Handles Lexical editor dirty tracking for a single section
- * DO NOT use this for startsWith or endsWith editors - only for section editors
  */
 export function TrackedSectionEditor({ section, editor, onEditorDirty, registerEditor, unregisterEditor, children }) {
-  const [isRegistered, setIsRegistered] = useState(false);
-
   // Setup dirty tracking for this editor
   const tracking = useEditorDirtyTracking(editor, section.id, onEditorDirty, {
     ignoreInitialLoad: true,
@@ -179,24 +233,17 @@ export function TrackedSectionEditor({ section, editor, onEditorDirty, registerE
   });
 
   // Register this editor with parent tracker
-  // Only run once when editor becomes available
   useEffect(() => {
-    if (editor && registerEditor && !isRegistered) {
+    if (editor && registerEditor) {
       registerEditor(section.id, editor, tracking);
-      setIsRegistered(true);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [section.id, !!editor]); // Only depend on section.id and whether editor exists
 
-  // Cleanup on unmount
-  useEffect(
-    () => () => {
-      if (unregisterEditor && isRegistered) {
+    return () => {
+      if (unregisterEditor) {
         unregisterEditor(section.id);
       }
-    },
-    [section.id, unregisterEditor, isRegistered]
-  );
+    };
+  }, [section.id, editor, tracking, registerEditor, unregisterEditor]);
 
   return children({ tracking });
 }
