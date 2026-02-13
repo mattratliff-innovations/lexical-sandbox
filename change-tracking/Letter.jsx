@@ -14,6 +14,7 @@ import ChangeSignatureModal from './ChangeSignatureModal';
 import DeleteLetterModal from './DeleteLetterModal';
 import renderPdfHtml from './htmlTo508CompliantPdfHtml';
 import './Letter.css';
+import { sortSectionsByOrder } from './LetterUtil';
 import PrintPreviewErrorModal from './PrintPreviewErrorsModal';
 import ReassignLetterButton from './ReassignLetterButton';
 import { LetterChangeTracker } from './scribeEditor/scribeDocument/LetterChangeTracker';
@@ -30,6 +31,8 @@ import { APP_API_ENDPOINT, createAuthenticatedAxios, PDF_ENDPOINT } from '../../
 import { deleteLetter } from '../../http/letters';
 import LoadingFallback from '../../utils/LoadingFallback';
 import SignaturePreview from '../admin/organizations/SignaturePreview';
+import useModalCheck from '../util/customHooks/useModalCheck';
+import UtilityModal from '../util/UtilityModal';
 
 const reviewButtonStyles = {
   button: {
@@ -113,20 +116,6 @@ function DeleteButton({ onClick }) {
       onClick={onClick}
       icon={Trash3Fill}
       text="Delete Letter"
-    />
-  );
-}
-
-function CheckChangesButton({ onClick, hasChanges }) {
-  return (
-    <ActionButton
-      data-testid="checkChanges"
-      id="checkChanges"
-      title="Check for Changes"
-      aria-label="Check for Changes"
-      onClick={onClick}
-      icon={ClockHistory}
-      text={hasChanges ? 'Has Unsaved Changes ⚠️' : 'No Changes ✓'}
     />
   );
 }
@@ -224,6 +213,11 @@ export default function Letter() {
   const { currentUser } = useContext(AppContext);
   const [unauthorized, setUnauthorized] = useState(false);
   const [invalidStatus, setInvalidStatus] = useState(false);
+  const checkForChangesRef = useRef(null);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const lastHasChangesRef = useRef(false);
+
+  const { isBlocked, setIsBlocked, blocker } = useModalCheck(hasUnsavedChanges);
 
   // Reset endnote manager when component unmounts or navigates away
   useEffect(
@@ -235,27 +229,28 @@ export default function Letter() {
     []
   );
 
-  // Prevent navigation if there are unsaved changes
+  // Used for track changes
   useEffect(() => {
-    const handleBeforeUnload = (e) => {
-      // We need to call checkForChanges from the tracker
-      // Since we don't have direct access here, we'll use a ref to store it
+    if (!initialDraft) return; // Do not start interval until initialDraft is set
+    const intervalId = setInterval(() => {
       if (checkForChangesRef.current) {
-        const { hasChanges } = checkForChangesRef.current();
-        if (hasChanges) {
-          e.preventDefault();
-          e.returnValue = ''; // Required for Chrome
-          return '';
+        try {
+          const result = checkForChangesRef.current();
+          const { hasChanges } = result;
+
+          // Log details for debugging
+          if (hasChanges !== lastHasChangesRef.current) {
+            lastHasChangesRef.current = hasChanges;
+            setHasUnsavedChanges(hasChanges);
+          }
+        } catch (error) {
+          console.error('Error checking for changes:', error);
         }
       }
-    };
-
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, []);
-
-  // Ref to store checkForChanges function
-  const checkForChangesRef = useRef(null);
+    }, 1000);
+    // eslint-disable-next-line consistent-return
+    return () => clearInterval(intervalId);
+  }, [initialDraft]); // Only run when initialDraft is set
 
   const renderToast = (type, message) => {
     toast[type](message, {
@@ -340,7 +335,7 @@ export default function Letter() {
         }));
         // Update initial draft to reflect saved state
         if (letterEditorRef.current?.draftState) {
-          setInitialDraft(letterEditorRef.current.draftState);
+          setInitialDraft(sortSectionsByOrder(letterEditorRef.current.draftState));
         }
         // Mark all changes as clean in the tracker
         if (markAllClean) {
@@ -463,7 +458,7 @@ export default function Letter() {
         if (window.endnoteManager) window.endnoteManager.initializeFromLetter(letter);
 
         setDraft(letter);
-        setInitialDraft(letter); // Save initial state for change tracking
+        setInitialDraft(sortSectionsByOrder(letter)); // Save initial state for change tracking
         setDraftOrganization(letter.organizationId);
         if (letter.letterType.signatureIncluded && letter.organizationSignature) {
           setDefaultSignature(letter.organizationSignature);
@@ -546,10 +541,7 @@ export default function Letter() {
   if (unauthorized) return <Unauthorized />;
 
   return (
-    <LetterChangeTracker
-      letterEditorRef={letterEditorRef}
-      initialLetter={initialDraft}
-    >
+    <LetterChangeTracker letterEditorRef={letterEditorRef} initialLetter={initialDraft}>
       {({
         checkForChanges,
         hasDirtyEditors,
@@ -573,12 +565,23 @@ export default function Letter() {
               />
             )}
 
+            <UtilityModal isOpen={isBlocked} setIsOpen={setIsBlocked} blocker={blocker} />
+
             <ActivityLogModal showModal={isModalOpen('activityLog')} hideModal={() => hideModal('activityLog')} letterId={draft.id} />
-            <DeleteLetterModal showModal={isModalOpen('deleteLetter')} setShowModal={setDeleteLetterModalOpen} confirmDeleteLetter={confirmDeleteLetter} />
+            <DeleteLetterModal
+              showModal={isModalOpen('deleteLetter')}
+              setShowModal={setDeleteLetterModalOpen}
+              confirmDeleteLetter={confirmDeleteLetter}
+            />
 
             {draft && (
               <>
-                <AddEnclosureModal showModal={isModalOpen('addEnclosure')} setShowModal={setAddEnclosureModalOpen} setLetter={setDraft} letter={draft} />
+                <AddEnclosureModal
+                  showModal={isModalOpen('addEnclosure')}
+                  setShowModal={setAddEnclosureModalOpen}
+                  setLetter={setDraft}
+                  letter={draft}
+                />
 
                 <PrintPreviewErrorModal
                   showModal={isModalOpen('printPreviewError')}
@@ -611,28 +614,7 @@ export default function Letter() {
                 ...scribeEditorConfig,
                 quickActions: [
                   { component: SaveButton, props: { onClick: () => saveDraft(markAllClean) } },
-                  {
-                    component: CheckChangesButton,
-                    props: {
-                      onClick: () => {
-                        const currentChanges = checkForChanges();
-                        const details = [];
-                        if (currentChanges.hasStructureChanges) {
-                          details.push(`Structure: ${currentChanges.structureChangeType}`);
-                        }
-                        if (currentChanges.hasEditorChanges) {
-                          details.push(`Content: ${currentChanges.dirtySections.length} section(s) modified`);
-                        }
 
-                        alert(
-                          currentChanges.hasChanges
-                            ? `Letter has unsaved changes!\n\n${details.join('\n')}`
-                            : 'No unsaved changes detected.'
-                        );
-                      },
-                      hasChanges: hasDirtyEditors, // Simple boolean, doesn't trigger structure check
-                    },
-                  },
                   {
                     component: ChangeHeaderButton,
                     props: { onClick: () => showModal('changeHeader') },

@@ -1,17 +1,18 @@
+/* eslint-disable no-underscore-dangle */
 /* eslint-disable import-x/extensions */
-/* eslint-disable no-use-before-define */
+
 import { useCallback, useEffect, useState } from 'react';
 
+import checkSectionsReordered from './LetterChangeTrackerHelperFunctions.js';
 import { useEditorDirtyTracking } from './useEditorDirtyTracking.js';
-
 /**
  * LetterChangeTracker
  * Used to track structural changes in the letter
  * 1. Section content changes - Lexical editor modifications within section editors (excluding startsWith/endsWith)
  * 2. Add/Remove sections - Changes to the sectionAttributes length
  * 3. Reordering sections - Change to section ID sequence based on order
- * 
- * Note: This tracker does NOT continuously check for changes. Instead, it provides a 
+ *
+ * Note: This tracker does NOT continuously check for changes. Instead, it provides a
  * checkForChanges() function that should be called on-demand (e.g., before navigation).
  */
 
@@ -26,16 +27,18 @@ import { useEditorDirtyTracking } from './useEditorDirtyTracking.js';
 export function useLetterStructureTracking(getCurrentLetter, initialLetter) {
   const checkStructureChanges = useCallback(() => {
     const currentLetter = getCurrentLetter();
-    
+
     if (!initialLetter || !currentLetter) {
       return { hasChanges: false, changeType: null };
     }
 
     // Filter out sections marked for destruction (_destroy)
-    const currentActiveSections = (currentLetter.sectionsAttributes || currentLetter.sections || [])
-      .filter(s => s._destroy === undefined || s._destroy === false || s._destroy === 0);
-    const initialActiveSections = (initialLetter.sectionsAttributes || initialLetter.sections || [])
-      .filter(s => s._destroy === undefined || s._destroy === false || s._destroy === 0);
+    const currentActiveSections = (currentLetter.sectionsAttributes || currentLetter.sections || []).filter(
+      (s) => s._destroy === undefined || s._destroy === false || s._destroy === 0
+    );
+    const initialActiveSections = (initialLetter.sectionsAttributes || initialLetter.sections || []).filter(
+      (s) => s._destroy === undefined || s._destroy === false || s._destroy === 0
+    );
 
     // 1. Check if sections were added/removed
     const sectionsCountChanged = currentActiveSections.length !== initialActiveSections.length;
@@ -61,40 +64,14 @@ export function useLetterStructureTracking(getCurrentLetter, initialLetter) {
 }
 
 /**
- * Check if sections have been reordered by comparing ID sequence
- * Compares array position, not the 'order' field (which may not be updated during reordering)
- */
-function checkSectionsReordered(currentSections, initialSections) {
-  if (!currentSections || !initialSections) return false;
-  if (currentSections.length !== initialSections.length) return false;
-
-  // Compare ID sequence in array order (don't sort by 'order' field)
-  // The array position IS the order after reordering via swapSections
-  const currentIds = currentSections.map((s) => s.id || s.frontEndId);
-  const initialIds = initialSections.map((s) => s.id || s.frontEndId);
-
-  return !arraysEqual(currentIds, initialIds);
-}
-
-/**
- * Compare two arrays for equality
- */
-function arraysEqual(a, b) {
-  if (a.length !== b.length) return false;
-  return a.every((val, idx) => val === b[idx]);
-}
-
-/**
  * Main component that coordinates letter change tracking
  * Tracks structural changes (add/remove/reorder sections) and editor content changes
- * 
+ *
  * Does NOT continuously check - provides checkForChanges() function instead
  */
 export function LetterChangeTracker({ letterEditorRef, initialLetter, children }) {
   // Get current letter from ref (always up-to-date)
-  const getCurrentLetter = useCallback(() => {
-    return letterEditorRef.current?.draftState || null;
-  }, [letterEditorRef]);
+  const getCurrentLetter = useCallback(() => letterEditorRef.current?.draftState || null, [letterEditorRef]);
 
   // Track structure changes
   const { checkStructureChanges } = useLetterStructureTracking(getCurrentLetter, initialLetter);
@@ -173,7 +150,7 @@ export function LetterChangeTracker({ letterEditorRef, initialLetter, children }
     // State for button display (doesn't trigger structure check)
     hasDirtyEditors: dirtySectionEditors.size > 0,
     dirtyEditorsCount: dirtySectionEditors.size,
-    
+
     // Methods
     checkForChanges, // Call this on-demand only
     registerSectionEditor,
@@ -212,13 +189,14 @@ export function TrackedSectionEditor({ section, editor, onEditorDirty, registerE
   }, [section.id, !!editor]); // Only depend on section.id and whether editor exists
 
   // Cleanup on unmount
-  useEffect(() => {
-    return () => {
+  useEffect(
+    () => () => {
       if (unregisterEditor && isRegistered) {
         unregisterEditor(section.id);
       }
-    };
-  }, [section.id, unregisterEditor, isRegistered]);
+    },
+    [section.id, unregisterEditor, isRegistered]
+  );
 
   return children({ tracking });
 }

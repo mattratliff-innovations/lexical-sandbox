@@ -1,3 +1,4 @@
+/* eslint-disable no-underscore-dangle */
 /* eslint-disable radix */
 /* eslint-disable no-restricted-syntax */
 /* eslint-disable react/require-default-props */
@@ -47,7 +48,7 @@ const ScribeDocument = forwardRef(
     const portraitUsLetterRef = useRef(null);
     const draftStateRef = useRef(draft); // Ref to track current draftState
     const [draftState, setDraftStateInternal] = useState(draft);
-    
+
     // Wrapper that updates ref synchronously
     const setDraftState = useCallback((updater) => {
       setDraftStateInternal((prevState) => {
@@ -56,7 +57,7 @@ const ScribeDocument = forwardRef(
         return nextState;
       });
     }, []);
-    
+
     const [frontEndIdToDelete, setFrontEndIdToDelete] = useState(null);
     const [showSectionDeleteModal, setShowSectionDeleteModal] = useState(false);
     const [organizationSignature, setOrganizationSignature] = useState(null);
@@ -337,6 +338,7 @@ const ScribeDocument = forwardRef(
           editable={editable}
           initialValue={initialValue}
           onChange={heightCheck}
+          // eslint-disable-next-line no-shadow
           editorRefAssignmentFunction={(editor) => {
             editorsRef.current[frontEndId] = editor;
           }}
@@ -360,8 +362,7 @@ const ScribeDocument = forwardRef(
             editor={editorsRef.current[frontEndId]}
             onEditorDirty={letterChangeTracking.handleSectionEditorDirty}
             registerEditor={letterChangeTracking.registerSectionEditor}
-            unregisterEditor={letterChangeTracking.unregisterSectionEditor}
-          >
+            unregisterEditor={letterChangeTracking.unregisterSectionEditor}>
             {() => <div>{editor}</div>}
           </TrackedSectionEditor>
         );
