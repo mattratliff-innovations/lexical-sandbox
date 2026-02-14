@@ -1,5 +1,5 @@
 /* eslint-disable react/prop-types */
-import React, { useCallback, useContext, useEffect, useRef, useState } from 'react';
+import React, { useContext, useEffect, useRef, useState } from 'react';
 
 import { DrButton } from '@druid/druid';
 import { DateTime } from 'luxon';
@@ -33,34 +33,12 @@ import LoadingFallback from '../../utils/LoadingFallback';
 import SignaturePreview from '../admin/organizations/SignaturePreview';
 import useModalCheck from '../util/customHooks/useModalCheck';
 import UtilityModal from '../util/UtilityModal';
+import { letterEditorToolList } from './scribeEditor/scribeDocument/lexical/lexicalToolbarHelper';
 
 const reviewButtonStyles = {
   button: {
     width: '100%',
   },
-};
-
-const standardList = [
-  'undo',
-  'redo',
-  'blockType',
-  'bold',
-  'italic',
-  'underline',
-  'highlight',
-  'indent',
-  'outdent',
-  'lists',
-  'alignMenu',
-  'cut',
-  'copy',
-  'paste',
-  'horizontalrule',
-];
-
-const letterToolList = {
-  leftSide: standardList,
-  rightSide: ['endnote', 'table', 'insert', 'fullscreen'],
 };
 
 // Define action button components
@@ -533,7 +511,8 @@ export default function Letter() {
         props: { onClick: () => showModal('deleteLetter') },
       },
     ],
-    toolList: letterToolList,
+
+    toolList: letterEditorToolList,
   };
 
   if (loading) return <LoadingFallback />;
