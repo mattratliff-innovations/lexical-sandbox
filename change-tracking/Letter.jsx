@@ -191,11 +191,17 @@ export default function Letter() {
   const { currentUser } = useContext(AppContext);
   const [unauthorized, setUnauthorized] = useState(false);
   const [invalidStatus, setInvalidStatus] = useState(false);
+  
+  // Refs for LetterChangeTracker (enables lazy checking without polling)
+  const draftRef = useRef(null);
+  const initialDraftRef = useRef(null);
   const checkForChangesRef = useRef(null);
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  const lastHasChangesRef = useRef(false);
 
-  const { isBlocked, setIsBlocked, blocker } = useModalCheck(hasUnsavedChanges);
+  const { isBlocked, setIsBlocked, blocker } = useModalCheck(() => {
+    if (!checkForChangesRef.current) return false;
+    const { hasChanges } = checkForChangesRef.current();
+    return hasChanges;
+  });
 
   // Reset endnote manager when component unmounts or navigates away
   useEffect(
@@ -207,28 +213,31 @@ export default function Letter() {
     []
   );
 
-  // Used for track changes
+  // Keep refs in sync with state for lazy checking
   useEffect(() => {
-    if (!initialDraft) return; // Do not start interval until initialDraft is set
-    const intervalId = setInterval(() => {
-      if (checkForChangesRef.current) {
-        try {
-          const result = checkForChangesRef.current();
-          const { hasChanges } = result;
+    draftRef.current = draft;
+  }, [draft]);
 
-          // Log details for debugging
-          if (hasChanges !== lastHasChangesRef.current) {
-            lastHasChangesRef.current = hasChanges;
-            setHasUnsavedChanges(hasChanges);
-          }
-        } catch (error) {
-          console.error('Error checking for changes:', error);
+  useEffect(() => {
+    initialDraftRef.current = initialDraft;
+  }, [initialDraft]);
+
+  // Prevent browser navigation if there are unsaved changes
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      if (checkForChangesRef.current) {
+        const { hasChanges } = checkForChangesRef.current();
+        if (hasChanges) {
+          e.preventDefault();
+          e.returnValue = ''; // Required for Chrome
+          return '';
         }
       }
-    }, 1000);
-    // eslint-disable-next-line consistent-return
-    return () => clearInterval(intervalId);
-  }, [initialDraft]); // Only run when initialDraft is set
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, []);
 
   const renderToast = (type, message) => {
     toast[type](message, {
@@ -520,7 +529,7 @@ export default function Letter() {
   if (unauthorized) return <Unauthorized />;
 
   return (
-    <LetterChangeTracker letterEditorRef={letterEditorRef} initialLetter={initialDraft}>
+    <LetterChangeTracker currentLetterRef={draftRef} initialLetterRef={initialDraftRef}>
       {({
         checkForChanges,
         hasDirtyEditors,
