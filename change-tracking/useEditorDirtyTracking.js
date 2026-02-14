@@ -88,9 +88,15 @@ export function useEditorDirtyTracking(editor, editorId, onDirtyChange, options 
     };
   }, [editor, editorId, onDirtyChange, debounceMs]);
 
+  // Check current dirty state without triggering callbacks
+  const checkIsDirty = useCallback(() => {
+    return isDirtyRef.current;
+  }, []);
+
   return {
     markClean,
     markSpellCheckStart,
     markSpellCheckEnd,
+    checkIsDirty,
   };
 }
