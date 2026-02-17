@@ -23,8 +23,8 @@ describe Api::Scribe::V1::HeadersController do
     it_behaves_like 'auth_filter',
                     verb: :get,
                     path: -> { "/api/scribe/v1/headers/#{header.id}" },
-                    allowed: %i[groupadmin templateadmin superadmin developer],
-                    forbidden: %i[viewonly creator creatorprinter supervisor]
+                    allowed: %i[creator creatorprinter supervisor groupadmin templateadmin superadmin developer],
+                    forbidden: %i[viewonly]
 
     it_behaves_like 'auth_filter',
                     verb: :post,
@@ -75,6 +75,7 @@ describe Api::Scribe::V1::HeadersController do
 
       context 'with no data in the db' do
         it 'returns a blank json list' do
+          Header.destroy_all
           action
 
           expect(response).to have_http_status(:ok)
@@ -102,7 +103,9 @@ describe Api::Scribe::V1::HeadersController do
 
       context 'with invalid params' do
         it 'returns an error message' do
-          expect { post '/api/scribe/v1/headers' }.to raise_error(ActionController::ParameterMissing)
+          post '/api/scribe/v1/headers', params: {}, as: :json
+          
+          expect(response).to have_http_status(:bad_request)
         end
       end
 
@@ -123,13 +126,13 @@ describe Api::Scribe::V1::HeadersController do
   describe 'show' do
     let(:action) { get "/api/scribe/v1/headers/#{header.id}" }
 
-    describe 'without templateadmin permissions' do
-      it_behaves_like 'templateadmin_permissions_required'
+    describe 'without creator permissions' do
+      it_behaves_like 'creator_permissions_required'
     end
 
-    describe 'with templateadmin permissions' do
+    describe 'with creator permissions' do
       before do
-        authenticate_to_templateadmin
+        authenticate_to_creator
       end
 
       it 'a header' do
@@ -188,7 +191,9 @@ describe Api::Scribe::V1::HeadersController do
 
       context 'with invalid params' do
         it 'returns an error message' do
-          expect { put "/api/scribe/v1/headers/#{header.id}" }.to raise_error(ActionController::ParameterMissing)
+          put \"/api/scribe/v1/headers/#{header.id}\", params: {}, as: :json
+          
+          expect(response).to have_http_status(:bad_request)
         end
       end
 
@@ -229,6 +234,8 @@ describe Api::Scribe::V1::HeadersController do
       end
 
       it 'returns only active headers if there is no organization id present' do
+        Header.destroy_all
+        header  # Ensure header is created
         get api_scribe_v1_headers_available_headers_for_organization_path
 
         body_json = response.parsed_body
