@@ -14,16 +14,16 @@ class Api::Scribe::V1::OrganizationsController < ApplicationController
 
   before_action :authenticate_up_to_group_or_template_permission!, only: %i[
     index
-    show
+  ]
+
+  before_action :authenticate_up_to_creator_permission!, only: [
+    :available_organization_header_letter_type,
+    :show
   ]
 
   before_action :verify_group_admin_org_access!, only: %i[
     update
     default_address
-  ]
-
-  before_action :authenticate_up_to_creator_permission!, only: [
-    :available_organization_header_letter_type
   ]
 
   def index
@@ -32,12 +32,13 @@ class Api::Scribe::V1::OrganizationsController < ApplicationController
 
   def create
     org_params = activate_default_address(organization_params)
-    @organization = Organization.create(org_params)
-
-    puts @organization.to_s
+    @organization = Organization.new(org_params)
 
     if @organization.save
-      render json: organization.as_xrefs_result
+      @organization = Organization.includes(:letter_types,
+      organization_address_xrefs: { address: [:state, :country] },
+      organization_header_letter_type_xrefs: [:letter_type, :header]).find(@organization.id)
+      render json: @organization.as_xrefs_result
     else
       errors = @organization.errors.map(&:full_message).join(', ')
       errors = errors.gsub("Name", "Organization Name")
@@ -46,28 +47,15 @@ class Api::Scribe::V1::OrganizationsController < ApplicationController
   end
 
   def show
-    organization = Organization.find(params[:id])
-    puts organization.as_xrefs_result
+    organization = Organization.includes(:letter_types, :organization_signatures,
+    organization_address_xrefs: { address: [:state, :country] },
+    organization_header_letter_type_xrefs: [:letter_type, :header]).find(params[:id])
     render json: organization.as_xrefs_result
-    # @organization = Organization.includes(
-    #   :letter_types,
-    #   :organization_signatures,
-    #   { organization_address_xrefs: { address: %i[state country] } }
-    # ).find(params[:id])
-
-    # render json: @organization.as_json(
-    #   include: [
-    #     :letter_types,
-    #     {
-    #       organization_signatures: { methods: :signature_image_url },
-    #       organization_address_xrefs: { include: :address }
-    #     }
-    #   ]
-    # )
   end
 
-  def update
+  def update # rubocop:disable Metrics/MethodLength
     organization = Organization.find(params[:id])
+
     org_params = activate_default_address(organization_params)
 
     ActiveRecord::Base.transaction do
@@ -76,23 +64,17 @@ class Api::Scribe::V1::OrganizationsController < ApplicationController
         spxref.destroy
       end
 
-      if organization.update(organization_params)
+      if organization.update(org_params)
+        organization = Organization.includes(:letter_types,
+        organization_address_xrefs: { address: [:state, :country] },
+
+        organization_header_letter_type_xrefs: [:letter_type, :header]).find(organization.id)
         render json: organization.as_xrefs_result
       else
         errors = organization.errors.map(&:full_message).join(', ')
-        # errors = errors.gsub("Code", "Paragraph Code")
         render json: { error: "Unable to edit Organization: #{errors}" }, status: :unprocessable_content
       end
     end
-    # @organization = Organization.includes(organization_address_xrefs: [:address]).find(params[:id])
-    # org_params = activate_default_address(organization_params)
-    # if @organization.update(In )
-    #   render json: @organization.to_json(include: [:letter_types, { organization_signatures: { methods: :signature_image_url },
-    #                                                                 organization_address_xrefs: { include: :address } }])
-    # else
-    #   errors = @organization.errors.map(&:full_message).join(', ')
-    #   render json: { error: "Unable to edit Organization: #{errors}" }, status: :unprocessable_content
-    # end
   end
 
   def available_organization_header_letter_type
@@ -108,6 +90,7 @@ class Api::Scribe::V1::OrganizationsController < ApplicationController
   def default_address
     organization = Organization.find(params[:id])
     updated_organization = OrganizationService.update_default_address(organization: organization, organization_params: organization_params)
+
     render json: updated_organization.to_json(include: { organization_signatures: { methods: :signature_image_url },
                                                          organization_address_xrefs: { include: :address } })
   end
@@ -120,10 +103,12 @@ class Api::Scribe::V1::OrganizationsController < ApplicationController
 
   private
 
-  def organization_params
+  def organization_params # rubocop:disable Metrics/MethodLength
     params.expect(organization: [
-                    :id, :name, :active, :days_forward, :code, :occ, :header_id,
-                    { letter_type_ids: [],
+                    :id, :name, :active, :days_forward, :code, :occ, :header_id, :org_rolledover, {
+                      excluded_organization_letter_category_ids: [],
+                      excluded_organization_scanned_digital_paper_letter_category_ids: [],
+                      letter_type_ids: [],
                       organization_address_xrefs_attributes: [[
                         :id, :premium_processing, :active, :default,
                         {
