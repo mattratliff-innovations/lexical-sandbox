@@ -50,6 +50,26 @@ jest.mock('../../../utils/actionHelpers', () => ({
   canViewComments: jest.fn(),
 }));
 
+// Mock toast helpers
+jest.mock('../../../utils/toastHelpers', () => ({
+  showToastError: jest.fn((message) => {
+    // Use the regular toast.error so tests can verify it
+    require('react-toastify').toast.error(message, {
+      position: 'top-center',
+      theme: 'dark',
+    });
+  }),
+}));
+
+// Mock letters HTTP functions - these will be handled by mockAxios
+// but we need the module to exist
+jest.mock('../../../http/letters', () => ({
+  addCommentToletter: jest.fn(),
+  fetchLetter: jest.fn(),
+  updateLetter: jest.fn(),
+  updateLetterStatus: jest.fn(),
+}));
+
 // Mock all child components - using factory functions
 jest.mock('../../../components/CommentHistory', () => ({
   __esModule: true,
@@ -157,6 +177,24 @@ jest.mock('./scribeDocument/lexical/plugins/spellChecker/SpellCheckPluginAccordi
   __esModule: true,
   default: function MockSpellCheckPluginAccordion({ issues }) {
     return <div data-testid="spell-check-accordion">Spell Check Issues: {issues?.length || 0}</div>;
+  },
+}));
+
+jest.mock('../PrintPreviewErrorsModal', () => ({
+  __esModule: true,
+  default: function MockPrintPreviewErrorModal({ showModal, setShowModal, linguisticErrors, draft }) {
+    if (!showModal) return null;
+    return (
+      <div data-testid="print-preview-error-modal">
+        Print Preview Errors
+        <div data-testid="error-modal-draft-id">{draft?.id}</div>
+        <div data-testid="error-modal-linguistic-count">{linguisticErrors?.length || 0}</div>
+        <div data-testid="error-modal-print-errors">{draft?.errors?.print?.length || 0} print errors</div>
+        <button data-testid="close-error-modal" onClick={() => setShowModal(false)}>
+          Close
+        </button>
+      </div>
+    );
   },
 }));
 
@@ -474,6 +512,468 @@ describe('ReviewActionsWrapper', () => {
       await userInstance.click(sendButton);
 
       expect(screen.getByTestId('modal-message')).toHaveTextContent(/Send for Review/i);
+    });
+
+    describe('validateAndSendForReview', () => {
+      it('saves draft data before validating when letterEditorRef is provided', async () => {
+        const userInstance = userEvent.setup();
+        const mockLetterEditorRef = {
+          current: {
+            letterDraftData: jest.fn(() => ({
+              id: mockUuid,
+              row1Col1: 'Updated content',
+              sectionsAttributes: [],
+            })),
+          },
+        };
+
+        mockAxios.onPut(`${APP_API_ENDPOINT}/letters/${mockUuid}`).reply(200, {
+          ...mockDocumentDetail,
+          errors: {},
+          contacts: [],
+        });
+
+        mockAxios.onPut(`${APP_API_ENDPOINT}/letters/${mockUuid}/send_for_review`).reply(200, { success: true });
+
+        mockAxios.onPost(`${APP_API_ENDPOINT}/letters/${mockUuid}/comments`).reply(200, { success: true });
+
+        renderComponent({ letterEditorRef: mockLetterEditorRef });
+
+        const sendButton = screen.getByText('Send for Review');
+        await userInstance.click(sendButton);
+
+        const confirmButton = screen.getByTestId('modal-confirm');
+        await userInstance.click(confirmButton);
+
+        await waitFor(() => {
+          expect(mockAxios.history.put.length).toBeGreaterThanOrEqual(1);
+          expect(mockLetterEditorRef.current.letterDraftData).toHaveBeenCalled();
+        });
+      });
+
+      it('fetches current draft when letterEditorRef is not provided', async () => {
+        const userInstance = userEvent.setup();
+
+        mockAxios.onGet(`${APP_API_ENDPOINT}/letters/${mockUuid}`).reply(200, {
+          ...mockDocumentDetail,
+          errors: {},
+          contacts: [],
+        });
+
+        mockAxios.onPut(`${APP_API_ENDPOINT}/letters/${mockUuid}/send_for_review`).reply(200, { success: true });
+
+        mockAxios.onPost(`${APP_API_ENDPOINT}/letters/${mockUuid}/comments`).reply(200, { success: true });
+
+        renderComponent();
+
+        const sendButton = screen.getByText('Send for Review');
+        await userInstance.click(sendButton);
+
+        const confirmButton = screen.getByTestId('modal-confirm');
+        await userInstance.click(confirmButton);
+
+        await waitFor(() => {
+          // Should fetch the letter to get current state
+          expect(mockAxios.history.get.length).toBeGreaterThanOrEqual(1);
+        });
+      });
+
+      it('shows error modal when draft has print errors', async () => {
+        const userInstance = userEvent.setup();
+        const mockLetterEditorRef = {
+          current: {
+            letterDraftData: jest.fn(() => ({
+              id: mockUuid,
+              sectionsAttributes: [],
+            })),
+          },
+        };
+
+        mockAxios.onPut(`${APP_API_ENDPOINT}/letters/${mockUuid}`).reply(200, {
+          ...mockDocumentDetail,
+          errors: {
+            print: ['Missing required field'],
+          },
+          contacts: [],
+        });
+
+        renderComponent({ letterEditorRef: mockLetterEditorRef });
+
+        const sendButton = screen.getByText('Send for Review');
+        await userInstance.click(sendButton);
+
+        const confirmButton = screen.getByTestId('modal-confirm');
+        await userInstance.click(confirmButton);
+
+        await waitFor(() => {
+          // Error modal should be shown
+          expect(screen.getByTestId('print-preview-error-modal')).toBeInTheDocument();
+          // Should NOT have sent for review
+          const sendForReviewCalls = mockAxios.history.put.filter((call) => call.url.includes('send_for_review'));
+          expect(sendForReviewCalls.length).toBe(0);
+        });
+      });
+
+      it('shows error modal when contact has print errors', async () => {
+        const userInstance = userEvent.setup();
+        const mockLetterEditorRef = {
+          current: {
+            letterDraftData: jest.fn(() => ({
+              id: mockUuid,
+              sectionsAttributes: [],
+            })),
+          },
+        };
+
+        mockAxios.onPut(`${APP_API_ENDPOINT}/letters/${mockUuid}`).reply(200, {
+          ...mockDocumentDetail,
+          errors: {},
+          contacts: [
+            {
+              id: 'contact-1',
+              name: 'John Doe',
+              errors: {
+                print: ['Invalid contact data'],
+              },
+            },
+          ],
+        });
+
+        renderComponent({ letterEditorRef: mockLetterEditorRef });
+
+        const sendButton = screen.getByText('Send for Review');
+        await userInstance.click(sendButton);
+
+        const confirmButton = screen.getByTestId('modal-confirm');
+        await userInstance.click(confirmButton);
+
+        await waitFor(() => {
+          expect(screen.getByTestId('print-preview-error-modal')).toBeInTheDocument();
+          const sendForReviewCalls = mockAxios.history.put.filter((call) => call.url.includes('send_for_review'));
+          expect(sendForReviewCalls.length).toBe(0);
+        });
+      });
+
+      it('shows error modal when contact address has print errors', async () => {
+        const userInstance = userEvent.setup();
+        const mockLetterEditorRef = {
+          current: {
+            letterDraftData: jest.fn(() => ({
+              id: mockUuid,
+              sectionsAttributes: [],
+            })),
+          },
+        };
+
+        mockAxios.onPut(`${APP_API_ENDPOINT}/letters/${mockUuid}`).reply(200, {
+          ...mockDocumentDetail,
+          errors: {},
+          contacts: [
+            {
+              id: 'contact-1',
+              name: 'John Doe',
+              errors: {},
+              address: {
+                errors: {
+                  print: ['Invalid address format'],
+                },
+              },
+            },
+          ],
+        });
+
+        renderComponent({ letterEditorRef: mockLetterEditorRef });
+
+        const sendButton = screen.getByText('Send for Review');
+        await userInstance.click(sendButton);
+
+        const confirmButton = screen.getByTestId('modal-confirm');
+        await userInstance.click(confirmButton);
+
+        await waitFor(() => {
+          expect(screen.getByTestId('print-preview-error-modal')).toBeInTheDocument();
+          const sendForReviewCalls = mockAxios.history.put.filter((call) => call.url.includes('send_for_review'));
+          expect(sendForReviewCalls.length).toBe(0);
+        });
+      });
+
+      it('proceeds with send for review when no print errors exist', async () => {
+        const userInstance = userEvent.setup();
+        const mockLetterEditorRef = {
+          current: {
+            letterDraftData: jest.fn(() => ({
+              id: mockUuid,
+              sectionsAttributes: [],
+            })),
+          },
+        };
+
+        mockAxios.onPut(`${APP_API_ENDPOINT}/letters/${mockUuid}`).reply(200, {
+          ...mockDocumentDetail,
+          errors: {},
+          contacts: [
+            {
+              id: 'contact-1',
+              name: 'John Doe',
+              errors: {},
+              address: {
+                errors: {},
+              },
+            },
+          ],
+        });
+
+        mockAxios.onPut(`${APP_API_ENDPOINT}/letters/${mockUuid}/send_for_review`).reply(200, { success: true });
+
+        mockAxios.onPost(`${APP_API_ENDPOINT}/letters/${mockUuid}/comments`).reply(200, { success: true });
+
+        renderComponent({ letterEditorRef: mockLetterEditorRef });
+
+        const sendButton = screen.getByText('Send for Review');
+        await userInstance.click(sendButton);
+
+        const confirmButton = screen.getByTestId('modal-confirm');
+        await userInstance.click(confirmButton);
+
+        await waitFor(() => {
+          const sendForReviewCalls = mockAxios.history.put.filter((call) => call.url.includes('send_for_review'));
+          expect(sendForReviewCalls.length).toBe(1);
+        });
+
+        expect(mockedUseNavigate).toHaveBeenCalledWith('/');
+      });
+
+      it('handles validation failure with error toast', async () => {
+        const userInstance = userEvent.setup();
+        const mockLetterEditorRef = {
+          current: {
+            letterDraftData: jest.fn(() => ({
+              id: mockUuid,
+              sectionsAttributes: [],
+            })),
+          },
+        };
+
+        mockAxios.onPut(`${APP_API_ENDPOINT}/letters/${mockUuid}`).networkError();
+
+        renderComponent({ letterEditorRef: mockLetterEditorRef });
+
+        const sendButton = screen.getByText('Send for Review');
+        await userInstance.click(sendButton);
+
+        const confirmButton = screen.getByTestId('modal-confirm');
+        await userInstance.click(confirmButton);
+
+        await waitFor(() => {
+          expect(toast.error).toHaveBeenCalledWith(
+            'Failed to validate draft. Please try again.',
+            expect.objectContaining({
+              position: 'top-center',
+              theme: 'dark',
+            })
+          );
+        });
+      });
+
+      it('includes organizationSignatureId when saving draft data', async () => {
+        const userInstance = userEvent.setup();
+        const mockLetterEditorRef = {
+          current: {
+            letterDraftData: jest.fn(() => ({
+              id: mockUuid,
+              row1Col1: 'Content',
+              sectionsAttributes: [],
+            })),
+          },
+        };
+
+        const documentWithSignature = {
+          ...mockDocumentDetail,
+          organizationSignature: {
+            id: 'signature-123',
+            name: 'John Doe',
+          },
+        };
+
+        mockAxios.onPut(`${APP_API_ENDPOINT}/letters/${mockUuid}`).reply((config) => {
+          const requestData = JSON.parse(config.data);
+          // Verify that organizationSignatureId is included
+          expect(requestData.letter.organizationSignatureId).toBe('signature-123');
+          return [
+            200,
+            {
+              ...documentWithSignature,
+              errors: {},
+              contacts: [],
+            },
+          ];
+        });
+
+        mockAxios.onPut(`${APP_API_ENDPOINT}/letters/${mockUuid}/send_for_review`).reply(200, { success: true });
+
+        mockAxios.onPost(`${APP_API_ENDPOINT}/letters/${mockUuid}/comments`).reply(200, { success: true });
+
+        renderComponent({ documentDetail: documentWithSignature, letterEditorRef: mockLetterEditorRef });
+
+        const sendButton = screen.getByText('Send for Review');
+        await userInstance.click(sendButton);
+
+        const confirmButton = screen.getByTestId('modal-confirm');
+        await userInstance.click(confirmButton);
+
+        await waitFor(() => {
+          expect(mockAxios.history.put.length).toBeGreaterThanOrEqual(1);
+        });
+      });
+
+      it('updates draftData state with saved draft for error modal', async () => {
+        const userInstance = userEvent.setup();
+        const mockLetterEditorRef = {
+          current: {
+            letterDraftData: jest.fn(() => ({
+              id: mockUuid,
+              sectionsAttributes: [],
+            })),
+          },
+        };
+
+        const updatedDraft = {
+          ...mockDocumentDetail,
+          updatedAt: '2024-01-16T10:00:00Z',
+          errors: {
+            print: ['Error message'],
+          },
+          contacts: [],
+        };
+
+        mockAxios.onPut(`${APP_API_ENDPOINT}/letters/${mockUuid}`).reply(200, updatedDraft);
+
+        renderComponent({ letterEditorRef: mockLetterEditorRef });
+
+        const sendButton = screen.getByText('Send for Review');
+        await userInstance.click(sendButton);
+
+        const confirmButton = screen.getByTestId('modal-confirm');
+        await userInstance.click(confirmButton);
+
+        await waitFor(() => {
+          expect(screen.getByTestId('print-preview-error-modal')).toBeInTheDocument();
+          // Verify the modal shows the updated draft ID
+          expect(screen.getByTestId('error-modal-draft-id')).toHaveTextContent(mockUuid);
+        });
+      });
+
+      it('handles contacts with no address gracefully', async () => {
+        const userInstance = userEvent.setup();
+        const mockLetterEditorRef = {
+          current: {
+            letterDraftData: jest.fn(() => ({
+              id: mockUuid,
+              sectionsAttributes: [],
+            })),
+          },
+        };
+
+        mockAxios.onPut(`${APP_API_ENDPOINT}/letters/${mockUuid}`).reply(200, {
+          ...mockDocumentDetail,
+          errors: {},
+          contacts: [
+            {
+              id: 'contact-1',
+              name: 'John Doe',
+              errors: {},
+              // No address field
+            },
+          ],
+        });
+
+        mockAxios.onPut(`${APP_API_ENDPOINT}/letters/${mockUuid}/send_for_review`).reply(200, { success: true });
+
+        mockAxios.onPost(`${APP_API_ENDPOINT}/letters/${mockUuid}/comments`).reply(200, { success: true });
+
+        renderComponent({ letterEditorRef: mockLetterEditorRef });
+
+        const sendButton = screen.getByText('Send for Review');
+        await userInstance.click(sendButton);
+
+        const confirmButton = screen.getByTestId('modal-confirm');
+        await userInstance.click(confirmButton);
+
+        await waitFor(() => {
+          const sendForReviewCalls = mockAxios.history.put.filter((call) => call.url.includes('send_for_review'));
+          expect(sendForReviewCalls.length).toBe(1);
+        });
+      });
+
+      it('handles empty contacts array without errors', async () => {
+        const userInstance = userEvent.setup();
+        const mockLetterEditorRef = {
+          current: {
+            letterDraftData: jest.fn(() => ({
+              id: mockUuid,
+              sectionsAttributes: [],
+            })),
+          },
+        };
+
+        mockAxios.onPut(`${APP_API_ENDPOINT}/letters/${mockUuid}`).reply(200, {
+          ...mockDocumentDetail,
+          errors: {},
+          contacts: [],
+        });
+
+        mockAxios.onPut(`${APP_API_ENDPOINT}/letters/${mockUuid}/send_for_review`).reply(200, { success: true });
+
+        mockAxios.onPost(`${APP_API_ENDPOINT}/letters/${mockUuid}/comments`).reply(200, { success: true });
+
+        renderComponent({ letterEditorRef: mockLetterEditorRef });
+
+        const sendButton = screen.getByText('Send for Review');
+        await userInstance.click(sendButton);
+
+        const confirmButton = screen.getByTestId('modal-confirm');
+        await userInstance.click(confirmButton);
+
+        await waitFor(() => {
+          const sendForReviewCalls = mockAxios.history.put.filter((call) => call.url.includes('send_for_review'));
+          expect(sendForReviewCalls.length).toBe(1);
+        });
+      });
+
+      it('handles undefined contacts gracefully', async () => {
+        const userInstance = userEvent.setup();
+        const mockLetterEditorRef = {
+          current: {
+            letterDraftData: jest.fn(() => ({
+              id: mockUuid,
+              sectionsAttributes: [],
+            })),
+          },
+        };
+
+        mockAxios.onPut(`${APP_API_ENDPOINT}/letters/${mockUuid}`).reply(200, {
+          ...mockDocumentDetail,
+          errors: {},
+          // No contacts field
+        });
+
+        mockAxios.onPut(`${APP_API_ENDPOINT}/letters/${mockUuid}/send_for_review`).reply(200, { success: true });
+
+        mockAxios.onPost(`${APP_API_ENDPOINT}/letters/${mockUuid}/comments`).reply(200, { success: true });
+
+        renderComponent({ letterEditorRef: mockLetterEditorRef });
+
+        const sendButton = screen.getByText('Send for Review');
+        await userInstance.click(sendButton);
+
+        const confirmButton = screen.getByTestId('modal-confirm');
+        await userInstance.click(confirmButton);
+
+        await waitFor(() => {
+          const sendForReviewCalls = mockAxios.history.put.filter((call) => call.url.includes('send_for_review'));
+          expect(sendForReviewCalls.length).toBe(1);
+        });
+      });
     });
   });
 
